@@ -1,0 +1,27 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.venv*/
+env/
+venv/
+ENV/
+
+# JSON (Excluding config json if needed)
+# Be careful: this ignores all json files including service account keys and local configs.
+*.json
+
+# Project specific
+data/
+logs/
+.pytest_cache/
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
