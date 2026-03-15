@@ -17,3 +17,4 @@ tiktoken
 plotly
 scipy
 rank_bm25
+pinecone-client
