@@ -155,3 +155,81 @@ def render_chat_sources(sources: List[Dict[str, Any]]):
             - 유사도: {source['유사도']}  
             - [영상 보기]({source['영상링크']})
             """)
+
+
+def render_login_page():
+    """전문적인 다크 모드 로그인 페이지 렌더링"""
+    st.markdown("""
+    <style>
+        .login-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #0E1117;
+        }
+        .login-card {
+            background-color: #1A1C24;
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            width: 400px;
+            border: 1px solid rgba(255,255,255,0.05);
+            text-align: center;
+        }
+        .login-header {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            color: #FFFFFF;
+            letter-spacing: -0.02em;
+        }
+        .login-subtitle {
+            font-size: 14px;
+            color: #94A3B8;
+            margin-bottom: 32px;
+        }
+        .stTextInput input {
+            height: 48px !important;
+            border-radius: 12px !important;
+        }
+        .stButton button {
+            width: 100% !important;
+            height: 48px !important;
+            border-radius: 12px !important;
+            font-weight: 700 !important;
+            margin-top: 10px !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # 중앙 정렬을 위한 빈 컬럼 활용
+    _, col, _ = st.columns([1, 2, 1])
+
+    with col:
+        st.write("") # 스페이서
+        st.write("")
+        
+        with st.container():
+            st.markdown('<div class="login-header">Stock Agent Terminal</div>', unsafe_allow_html=True)
+            st.markdown('<div class="login-subtitle">전문 투자 분석을 위한 멀티 에이전트 시스템</div>', unsafe_allow_html=True)
+            
+            with st.form("login_form"):
+                username = st.text_input("Username", placeholder="admin")
+                password = st.text_input("Password", type="password", placeholder="••••••••")
+                submit = st.form_submit_button("Sign In")
+                
+                if submit:
+                    if username == "admin" and password == "admin":
+                        st.session_state.authenticated = True
+                        st.success("로그인 성공!")
+                        st.rerun()
+                    else:
+                        st.error("계정 정보가 일치하지 않습니다.")
+        
+        st.markdown("""
+        <div style="text-align: center; margin-top: 20px; color: #475569; font-size: 12px;">
+            © 2026 Stock Agent Terminal. All rights reserved.
+        </div>
+        """, unsafe_allow_html=True)

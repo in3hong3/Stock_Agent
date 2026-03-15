@@ -8,7 +8,10 @@ import pandas as pd
 import datetime
 from config.settings import PAGE_TITLE, PAGE_ICON, AGENT_REGISTRY
 from ui.theme import get_cached_fear_greed_index, get_heatmap_color, apply_theme, get_point_color
-from ui.components import render_agent_selector, render_market_summary, render_chat_sources, render_ticker_tape, render_fear_greed_gauge
+from ui.components import (
+    render_agent_selector, render_market_summary, render_chat_sources, 
+    render_ticker_tape, render_fear_greed_gauge, render_login_page
+)
 from agents.rag_agent import RAGAgent
 from agents.quant_agent import QuantAnalyst
 from agents.technical_agent import TechnicalAgent
@@ -67,6 +70,14 @@ def main():
         layout="wide",
         initial_sidebar_state="collapsed"
     )
+
+    # 0. 인증 체크 (Login)
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        render_login_page()
+        st.stop()
     
     # Fear & Greed Index 가져오기 (창을 처음 열었을 때만 1회 가져와서 세션에 저장)
     if "fg_index" not in st.session_state:
