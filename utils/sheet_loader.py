@@ -28,9 +28,22 @@ class SheetDataLoader:
         if not self.credentials_json or not self.sheet_url:
             raise ValueError("Google Sheets credentials and URL must be provided")
         
-        self.creds = ServiceAccountCredentials.from_json_keyfile_name(
-            self.credentials_json, self.scope
-        )
+        try:
+            # Check if credentials_json is actually a JSON string (for cloud deployment)
+            import json
+            if self.credentials_json.strip().startswith('{'):
+                creds_dict = json.loads(self.credentials_json)
+                self.creds = ServiceAccountCredentials.from_json_keyfile_dict(
+                    creds_dict, self.scope
+                )
+            else:
+                # Treat as a file path (for local development)
+                self.creds = ServiceAccountCredentials.from_json_keyfile_name(
+                    self.credentials_json, self.scope
+                )
+        except Exception as e:
+            raise ValueError(f"Error loading Google Sheets credentials: {str(e)}")
+
         self.client = gspread.authorize(self.creds)
         self.doc = None
     
