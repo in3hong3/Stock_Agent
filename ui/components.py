@@ -216,8 +216,8 @@ def render_login_page():
             st.markdown('<div class="login-subtitle">전문 투자 분석을 위한 멀티 에이전트 시스템</div>', unsafe_allow_html=True)
             
             with st.form("login_form"):
-                username = st.text_input("Username", placeholder="admin")
-                password = st.text_input("Password", type="password", placeholder="••••••••")
+                username = st.text_input("Username")
+                password = st.text_input("Password", type="password")
                 submit = st.form_submit_button("Sign In")
                 
                 if submit:
