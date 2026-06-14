@@ -15,7 +15,11 @@ import pandas as pd
 import yfinance as yf
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PRED_FILE = os.path.join(_BASE_DIR, "data", "signal_predictions.csv")
+from utils.user_data import signal_predictions_path
+
+
+def _pred_file() -> str:
+    return signal_predictions_path()
 
 COLUMNS = [
     "pred_date", "ticker", "stance", "action", "setup", "score",
@@ -27,9 +31,9 @@ COLUMNS = [
 
 
 def _load() -> pd.DataFrame:
-    if not os.path.exists(PRED_FILE):
+    if not os.path.exists(_pred_file()):
         return pd.DataFrame(columns=COLUMNS)
-    df = pd.read_csv(PRED_FILE)
+    df = pd.read_csv(_pred_file())
     for c in COLUMNS:
         if c not in df.columns:
             df[c] = None
@@ -37,8 +41,8 @@ def _load() -> pd.DataFrame:
 
 
 def _save(df: pd.DataFrame):
-    os.makedirs(os.path.dirname(PRED_FILE), exist_ok=True)
-    df.to_csv(PRED_FILE, index=False)
+    os.makedirs(os.path.dirname(_pred_file()), exist_ok=True)
+    df.to_csv(_pred_file(), index=False)
 
 
 def record_predictions(signals: List[Dict], stance: str) -> int:

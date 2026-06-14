@@ -3,7 +3,11 @@ import os
 from datetime import date
 import pandas as pd
 
-_HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "asset_history.csv")
+from utils.user_data import asset_history_path
+
+
+def _history_file() -> str:
+    return asset_history_path()
 
 
 def record_asset_snapshot(total_krw: float, stock_krw: float, cash_krw: float):
@@ -14,22 +18,22 @@ def record_asset_snapshot(total_krw: float, stock_krw: float, cash_krw: float):
     today = date.today().strftime("%Y-%m-%d")
     row = {"date": today, "total": round(total_krw), "stock": round(stock_krw), "cash": round(cash_krw)}
 
-    if os.path.exists(_HISTORY_FILE):
-        df = pd.read_csv(_HISTORY_FILE)
+    if os.path.exists(_history_file()):
+        df = pd.read_csv(_history_file())
         df = df[df["date"] != today]  # 오늘 기존 행 제거 후 최신값으로 교체
         df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
     else:
-        os.makedirs(os.path.dirname(_HISTORY_FILE), exist_ok=True)
+        os.makedirs(os.path.dirname(_history_file()), exist_ok=True)
         df = pd.DataFrame([row])
 
-    df.sort_values("date").to_csv(_HISTORY_FILE, index=False)
+    df.sort_values("date").to_csv(_history_file(), index=False)
 
 
 def load_asset_history() -> pd.DataFrame:
     """자산 추이 로드 (date 인덱스). 없으면 빈 DataFrame."""
-    if not os.path.exists(_HISTORY_FILE):
+    if not os.path.exists(_history_file()):
         return pd.DataFrame()
-    df = pd.read_csv(_HISTORY_FILE, parse_dates=["date"])
+    df = pd.read_csv(_history_file(), parse_dates=["date"])
     return df.set_index("date").sort_index()
 
 

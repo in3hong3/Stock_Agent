@@ -270,10 +270,14 @@ def render_login_page():
 
             if submit:
                 import os
-                valid_user = os.getenv("APP_USERNAME", "admin")
-                valid_pass = os.getenv("APP_PASSWORD", "admin")
-                if username == valid_user and password == valid_pass:
+                # 계정 목록: 환경변수 또는 기본값
+                accounts = {
+                    os.getenv("APP_USERNAME", "admin"): os.getenv("APP_PASSWORD", "admin"),
+                    "song": os.getenv("APP_PASSWORD_SONG", "song"),
+                }
+                if username in accounts and password == accounts[username]:
                     st.session_state.authenticated = True
+                    st.session_state.user_id = username  # 사용자 ID 저장
                     st.rerun()
                 else:
                     st.error("계정 정보가 일치하지 않습니다.")

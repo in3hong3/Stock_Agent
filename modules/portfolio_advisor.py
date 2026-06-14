@@ -12,7 +12,11 @@ from typing import Dict, List, Any
 import yfinance as yf
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EVAL_FILE = os.path.join(_BASE_DIR, "data", "portfolio_eval.json")
+from utils.user_data import portfolio_eval_path
+
+
+def _eval_file() -> str:
+    return portfolio_eval_path()
 
 
 # ──────────────────────────────────────────────
@@ -173,7 +177,7 @@ def evaluate_portfolio(holdings: List[Dict], stance: str = "neutral",
 # ──────────────────────────────────────────────
 def _load_evals() -> Dict:
     try:
-        with open(EVAL_FILE, "r", encoding="utf-8") as f:
+        with open(_eval_file(), "r", encoding="utf-8") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
@@ -197,8 +201,8 @@ def get_or_create_eval(holdings: List[Dict], stance: str, force: bool = False) -
     # 오늘 것만 유지 (과거 날짜 정리)
     store = {k: v for k, v in store.items() if k.startswith(today)}
     store[key] = entry
-    os.makedirs(os.path.dirname(EVAL_FILE), exist_ok=True)
-    with open(EVAL_FILE, "w", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(_eval_file()), exist_ok=True)
+    with open(_eval_file(), "w", encoding="utf-8") as f:
         json.dump(store, f, ensure_ascii=False, indent=2)
 
     return {**entry, "cached": False}

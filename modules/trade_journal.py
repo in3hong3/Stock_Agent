@@ -11,15 +11,19 @@ from typing import Dict, Any
 import pandas as pd
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JOURNAL_FILE = os.path.join(_BASE_DIR, "data", "trade_journal.csv")
+from utils.user_data import trade_journal_path, portfolio_path
+
+
+def _journal_file() -> str:
+    return trade_journal_path()
 
 COLUMNS = ["date", "ticker", "name", "side", "quantity", "price", "avg_price_at_sale", "realized_pnl", "memo"]
 
 
 def load_journal() -> pd.DataFrame:
-    if not os.path.exists(JOURNAL_FILE):
+    if not os.path.exists(_journal_file()):
         return pd.DataFrame(columns=COLUMNS)
-    df = pd.read_csv(JOURNAL_FILE)
+    df = pd.read_csv(_journal_file())
     for col in COLUMNS:
         if col not in df.columns:
             df[col] = None
@@ -27,8 +31,8 @@ def load_journal() -> pd.DataFrame:
 
 
 def _save(df: pd.DataFrame):
-    os.makedirs(os.path.dirname(JOURNAL_FILE), exist_ok=True)
-    df.to_csv(JOURNAL_FILE, index=False)
+    os.makedirs(os.path.dirname(_journal_file()), exist_ok=True)
+    df.to_csv(_journal_file(), index=False)
 
 
 def add_trade(trade_date: str, ticker: str, name: str, side: str,
@@ -110,7 +114,7 @@ def apply_to_portfolio(ticker: str, side: str, quantity: float, price: float,
     - 매도: 수량 차감, 0이 되면 행 제거
     Returns: {"success": bool, "message": str, "avg_price": float(매도 시 평단가)}
     """
-    pf_path = portfolio_file or os.path.join(_BASE_DIR, "data", "portfolio.csv")
+    pf_path = portfolio_file or portfolio_path()
     if not os.path.exists(pf_path):
         return {"success": False, "message": "portfolio.csv가 없습니다."}
 

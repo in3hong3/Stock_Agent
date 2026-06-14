@@ -84,6 +84,17 @@ def render_mobile_nav(selected_tab: str = None):
     return selected.split(' ', 1)[1]  # return tab name without icon
 
 def render_side_panel(fg_index, fg_status, status_text, point_color):
+    # 현재 사용자 + 로그아웃
+    uid = st.session_state.get("user_id", "?")
+    uc1, uc2 = st.columns([3, 1])
+    uc1.markdown(f"👤 **{uid}**님 로그인 중")
+    if uc2.button("로그아웃", key="logout_btn", use_container_width=True):
+        for k in ("authenticated", "user_id", "_migrated", "df_portfolio",
+                  "portfolio_data", "tracker_briefing", "portfolio_eval"):
+            st.session_state.pop(k, None)
+        st.rerun()
+    st.divider()
+
     st.subheader("🌋 시장 심리 (Fear & Greed)")
     render_fear_greed_gauge(fg_index)
     if fg_index is not None:
@@ -1398,13 +1409,15 @@ def _render_subtab_personal_chat(edited_df):
         st.info("👆 위에서 질문을 입력하세요!")
 
 
-_PRICE_META_FILE = "data/portfolio_meta.json"
+def _price_meta_file() -> str:
+    from utils.user_data import portfolio_meta_path
+    return portfolio_meta_path()
 
 
 def _load_meta() -> dict:
     import json
     try:
-        with open(_PRICE_META_FILE, "r", encoding="utf-8") as f:
+        with open(_price_meta_file(), "r", encoding="utf-8") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
@@ -1415,8 +1428,9 @@ def _save_meta(**updates):
     import json
     meta = _load_meta()
     meta.update(updates)
-    os.makedirs("data", exist_ok=True)
-    with open(_PRICE_META_FILE, "w", encoding="utf-8") as f:
+    path = _price_meta_file()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
 
@@ -1435,19 +1449,20 @@ def _load_cash() -> dict:
 
 
 def render_tab_portfolio():
-    st.header("💼 내 포트폴리오")
-    st.caption("로컬 데이터 기반 보유 주식 분석 (data/portfolio.csv 파일을 수정하세요)")
+    from utils.user_data import portfolio_path, current_user
+    st.header(f"💼 내 포트폴리오 — {current_user()}")
+    st.caption("개인 보유 종목 — 로그인한 계정별로 따로 저장됩니다.")
 
     if "portfolio_data" not in st.session_state:
         st.session_state.portfolio_data = None
 
-    PORTFOLIO_FILE = "data/portfolio.csv"
+    PORTFOLIO_FILE = portfolio_path()
     st.subheader("📊 포트폴리오 관리")
 
     if not os.path.exists(PORTFOLIO_FILE):
-        st.error(f"⚠️ `{PORTFOLIO_FILE}` 파일을 찾을 수 없습니다.")
+        st.info(f"📁 아직 포트폴리오가 비어있습니다. 종목을 추가하거나 샘플로 시작하세요.")
         if st.button("📁 샘플 파일 생성"):
-            os.makedirs("data", exist_ok=True)
+            os.makedirs(os.path.dirname(PORTFOLIO_FILE), exist_ok=True)
             with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
                 f.write("ticker,name,quantity,avg_price,current_price\n")
                 f.write("TSLA,테슬라,10,200,250\n")
@@ -2040,6 +2055,14 @@ def main():
     if not st.session_state.authenticated:
         render_login_page()
         st.stop()
+
+    # 로그인 후 한 번만: 기존 단일 사용자 데이터를 admin 폴더로 마이그레이션
+    if not st.session_state.get("_migrated"):
+        from utils.user_data import migrate_legacy_to_user
+        moved = migrate_legacy_to_user("admin")
+        if moved:
+            print(f"마이그레이션 완료: {moved}")
+        st.session_state["_migrated"] = True
 
     if "fg_index" not in st.session_state:
         st.session_state.fg_index, st.session_state.fg_status = get_cached_fear_greed_index()

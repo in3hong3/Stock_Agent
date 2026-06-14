@@ -13,8 +13,15 @@ import pandas as pd
 import yfinance as yf
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TRACKED_FILE = os.path.join(_BASE_DIR, "data", "tracked_tickers.json")
-PORTFOLIO_CSV = os.path.join(_BASE_DIR, "data", "portfolio.csv")
+from utils.user_data import user_file, portfolio_path
+
+
+def _tracked_file() -> str:
+    return user_file("tracked_tickers.json")
+
+
+def _portfolio_csv() -> str:
+    return portfolio_path()
 
 # 한글 종목명 → 티커 간편 매핑 (입력 편의)
 NAME_TO_TICKER = {
@@ -35,18 +42,18 @@ NAME_TO_TICKER = {
 # ──────────────────────────────────────────────
 def load_tracked() -> List[Dict[str, str]]:
     """[{ticker, name, added}] 리스트. 파일 없으면 portfolio.csv에서 시드."""
-    if os.path.exists(TRACKED_FILE):
+    if os.path.exists(_tracked_file()):
         try:
-            with open(TRACKED_FILE, "r", encoding="utf-8") as f:
+            with open(_tracked_file(), "r", encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, OSError):
             return []
 
     # 최초 실행: 포트폴리오 CSV의 종목을 자동으로 가져옴
     seed = []
-    if os.path.exists(PORTFOLIO_CSV):
+    if os.path.exists(_portfolio_csv()):
         try:
-            df = pd.read_csv(PORTFOLIO_CSV)
+            df = pd.read_csv(_portfolio_csv())
             for _, row in df.iterrows():
                 seed.append({
                     "ticker": str(row["ticker"]).strip().upper(),
@@ -60,8 +67,8 @@ def load_tracked() -> List[Dict[str, str]]:
 
 
 def save_tracked(items: List[Dict[str, str]]):
-    os.makedirs(os.path.dirname(TRACKED_FILE), exist_ok=True)
-    with open(TRACKED_FILE, "w", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(_tracked_file()), exist_ok=True)
+    with open(_tracked_file(), "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
 
@@ -117,10 +124,10 @@ def remove_ticker(ticker: str):
 # ──────────────────────────────────────────────
 def get_portfolio_holdings() -> List[Dict[str, Any]]:
     """portfolio.csv에서 보유 종목 목록 로드: [{ticker, name, quantity, avg_price}]"""
-    if not os.path.exists(PORTFOLIO_CSV):
+    if not os.path.exists(_portfolio_csv()):
         return []
     try:
-        df = pd.read_csv(PORTFOLIO_CSV)
+        df = pd.read_csv(_portfolio_csv())
         return [
             {
                 "ticker": str(row["ticker"]).strip().upper(),
