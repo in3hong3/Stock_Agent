@@ -20,7 +20,7 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ALERTS_FILE = os.path.join(_BASE_DIR, "data", "video_alerts.json")
 
 
-def get_recent_videos(days: int = 30, max_videos: int = 50) -> List[Dict]:
+def get_recent_videos(days: int = 90, max_videos: int = 60) -> List[Dict]:
     """최근 N일 영상 메타+요약 텍스트 가져오기 (Pinecone)"""
     from utils.pinecone_store import PineconeStore
     from config.settings import PINECONE_NAMESPACE_SUMMARY
@@ -87,15 +87,16 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
 
     user_prompt = f"""오늘 날짜: {today} ({weekday}요일)
 {holdings_text}
-아래는 최근 영상들이야:
+아래는 최근 90일간 유튜버 영상이야 (최신순):
 
 {videos_text}
 
 위 영상들에서 **오늘 이후 활성인 시점 알림**만 골라줘:
 
-1. 🚨 **즉시 경고** — 최근 1-2일 영상에서 "오늘/내일/이번 주 장 시작 전" 류 단기 권고
-2. ⏰ **시점 도래** — 과거 영상에서 'X월에', '여름에', '반년 후' 등 언급한 시점이 지금~다음주 안에 도래
-3. 📅 **이벤트 임박** — 실적/FOMC/CPI 등 임박한 이벤트 관련 권고
+1. 🚨 **즉시 경고** — 최근 1~3일 영상에서 "오늘/내일/이번 주 장 시작 전" 류 단기 권고·경고
+2. ⏰ **시점 도래** — 과거 영상에서 'X월에', '여름에', '반년 후', '하반기' 등 언급한 시점이
+   지금~앞으로 2주 안에 도래하는 것 (가장 중요한 카테고리 — 가장 적극적으로 찾아라)
+3. 📅 **이벤트 임박** — 실적/FOMC/CPI/잡스리포트 등 임박한 이벤트(2주 이내) 관련 권고
 
 순수 JSON으로만 반환:
 {{
@@ -115,14 +116,18 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
   ]
 }}
 
-규칙:
-- 내 보유 종목 직접 관련을 우선 (있을 시 최상단)
-- 시장 전반 경고도 포함 (예: 조정 임박, 변동성 확대)
-- 만료일(expires)은 보수적으로 (즉시=오늘+3일, 시점도래=시점일+7일, 이벤트=이벤트일+1일)
-- 모호한 의견(그냥 "좋다", "전망 밝다")은 제외 — 시점·행동 명확한 것만
+만료일 기준 (관대하게):
+- 즉시 경고: 영상일 + 5일
+- 시점 도래: 언급한 시점일 + 14일 (시점 모호하면 오늘 + 14일)
+- 이벤트 임박: 이벤트일 + 3일
+
+기타 규칙:
+- 내 보유 종목 직접 관련을 우선 (있을 시 상단)
+- 시장 전반 경고/기회도 포함 (조정 임박, 변동성 확대, 매수 기회 등)
+- 모호한 의견("그냥 좋다", "전망 밝다")은 제외 — 시점·행동 명확한 것만
 - 같은 종목·같은 주장 중복 금지
 - ticker/theme/video_link 없으면 null
-- 최대 8개. 정말 활성인 게 없으면 alerts:[]
+- 최대 10개. 정말 활성인 게 없으면 alerts:[]
 """
 
     client = OpenAI()
@@ -177,9 +182,22 @@ def get_active_alerts() -> List[Dict]:
     return [a for a in data.get("alerts", []) if a.get("expires", "9999-99-99") >= today]
 
 
-def refresh_alerts(holdings: List[Dict] = None, days: int = 30) -> Dict:
+def refresh_alerts(holdings: List[Dict] = None, days: int = 90) -> Dict:
     """RAG에서 영상 가져와 알림 강제 갱신"""
     videos = get_recent_videos(days=days)
     alerts = extract_timing_alerts(videos, holdings)
     save_alerts(alerts)
     return {"video_count": len(videos), "alert_count": len(alerts)}
+
+
+def needs_refresh(stale_hours: int = 12) -> bool:
+    """알림이 stale_hours 이상 묵었으면 True"""
+    data = load_alerts()
+    gen_at = data.get("generated_at")
+    if not gen_at:
+        return True
+    try:
+        last = datetime.fromisoformat(gen_at)
+        return (datetime.now() - last).total_seconds() > stale_hours * 3600
+    except (ValueError, TypeError):
+        return True

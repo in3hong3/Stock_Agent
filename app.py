@@ -284,18 +284,38 @@ def render_tab_tracker():
     except Exception as e:
         print(f"오늘 할 일 생성 실패: {e}")
 
-    # ── 🎤 유튜버 타이밍 알림 (RAG 영상에서 시점 기반 알림 추출) ──
+    # ── 🎤 유튜버 타이밍 알림 (RAG 영상에서 시점 기반 알림 자동 추출) ──
     try:
-        from modules.video_timing import get_active_alerts, load_alerts
+        from modules.video_timing import (
+            get_active_alerts, load_alerts, refresh_alerts as _refresh_alerts,
+            needs_refresh as _needs_refresh,
+        )
+
+        # 자동 갱신: 12시간 이상 묵었으면 페이지 진입 시 한 번만 실행
+        if _needs_refresh(stale_hours=12) and not st.session_state.get("_video_refresh_attempted"):
+            st.session_state["_video_refresh_attempted"] = True
+            from utils.loading import ProgressBanner
+            try:
+                with ProgressBanner(
+                    title="유튜버 영상 알림 자동 갱신 중",
+                    total=2, icon="🎤",
+                ) as banner:
+                    banner.step("📺 최근 90일 영상 수집 중...")
+                    banner.step("🤖 AI가 시점 알림 추출 중... (15~30초)")
+                    _refresh_alerts(tracked, days=90)
+                    banner.done("✅ 갱신 완료!")
+            except Exception as ve:
+                print(f"자동 갱신 실패: {ve}")
+
         alerts_data = load_alerts()
         active_alerts = get_active_alerts()
 
         if active_alerts:
             gen_at = alerts_data.get("generated_at", "")
-            gen_label = gen_at[:16].replace("T", " ") if gen_at else "없음"
+            gen_label = gen_at[:16].replace("T", " ") if gen_at else "—"
 
             cards = ""
-            for a in active_alerts[:6]:
+            for a in active_alerts[:8]:
                 ticker_badge = (
                     f"<span style='background:#3b82f655; color:#60a5fa; padding:2px 8px; "
                     f"border-radius:4px; font-size:0.78rem; font-weight:700;'>{a['ticker']}</span> "
@@ -321,35 +341,12 @@ def render_tab_tracker():
                 f"<div style='font-weight: 700; font-size: 1.05rem; margin-bottom: 6px;'>"
                 f"🎤 유튜버 타이밍 알림 "
                 f"<span style='font-size: 0.75rem; color: #94A3B8;'>"
-                f"(RAG 영상 분석 · 갱신 {gen_label})</span></div>"
+                f"(RAG 영상 분석 · 12시간마다 자동 갱신 · 마지막 {gen_label})</span></div>"
                 f"{cards}"
                 f"</div>",
                 unsafe_allow_html=True,
             )
-
-        # 알림이 없거나 갱신 원할 때
-        col_v1, col_v2 = st.columns([3, 1])
-        with col_v1:
-            if not active_alerts:
-                st.info("🎤 아직 추출된 유튜버 알림이 없습니다. 오른쪽 버튼으로 영상 분석을 시작하세요.")
-        with col_v2:
-            if st.button("🔄 영상 알림 갱신", key="refresh_video_alerts", use_container_width=True,
-                         help="최근 30일 영상을 다시 분석합니다 (15~30초)"):
-                from utils.loading import ProgressBanner
-                from modules.video_timing import refresh_alerts as _refresh_alerts
-                try:
-                    with ProgressBanner(
-                        title="유튜버 영상 분석 중",
-                        total=3, icon="🎤",
-                    ) as banner:
-                        banner.step("📺 RAG에서 최근 30일 영상 수집...")
-                        banner.step("🤖 AI가 시점 알림 추출 중... (10~30초)")
-                        r = _refresh_alerts(tracked, days=30)
-                        banner.step(f"📋 {r['video_count']}개 영상 → {r['alert_count']}개 알림")
-                        banner.done(f"✅ {r['alert_count']}개 알림 추출 완료!")
-                    st.rerun()
-                except Exception as ve:
-                    st.error(f"❌ 알림 갱신 실패: {ve}")
+        # 알림 0개인 경우엔 굳이 표시 안 함 (지침성 정보가 없으면 깔끔하게)
     except Exception as e:
         print(f"유튜버 알림 표시 실패: {e}")
 

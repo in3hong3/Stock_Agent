@@ -39,7 +39,7 @@ def main():
     print(f"=== {datetime.now().strftime('%Y-%m-%d %H:%M')} 영상 알림 갱신 시작 ===")
     print(f"통합 종목 {len(all_holdings)}개 기준 분석...")
     try:
-        result = refresh_alerts(holdings=all_holdings, days=30)
+        result = refresh_alerts(holdings=all_holdings, days=90)
         print(f"✅ 완료: 영상 {result['video_count']}개 → 알림 {result['alert_count']}개")
     except Exception as e:
         print(f"❌ 실패: {e}")
