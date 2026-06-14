@@ -87,7 +87,7 @@ def get_recent_videos(days: int = 90, max_videos: int = 50) -> List[Dict]:
 
 
 def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
-                          model: str = "gpt-4o-mini") -> List[Dict]:
+                          model: str = "gpt-4o") -> List[Dict]:
     """LLM으로 시점 알림 추출"""
     if not videos:
         return []
@@ -206,18 +206,40 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
         result = json.loads(response.choices[0].message.content)
         alerts = result.get("alerts", [])
 
-        # video_link 매핑 (LLM이 누락하면 영상 제목으로 검색해서 보강)
+        # 후처리: LLM이 누락하거나 "null" 문자열로 채운 필드 보강
         title_to_link = {v["title"]: v["link"] for v in videos}
         title_to_date = {v["title"]: v["date"] for v in videos}
+
+        def _clean_null(v):
+            """LLM이 'null' 문자열로 채운 값을 None으로"""
+            if v in ("null", "None", "", None):
+                return None
+            return v
+
         cleaned = []
         for a in alerts:
+            # 모든 필드의 'null' 문자열 정리
+            for k in list(a.keys()):
+                a[k] = _clean_null(a[k])
+
             # 출처 영상이 없는 알림은 신뢰도 낮음 → 제외
             if not a.get("source_video"):
                 continue
+
+            # video_link 누락 시 제목으로 매칭 (완전일치 → 부분일치)
             if not a.get("video_link"):
-                a["video_link"] = title_to_link.get(a["source_video"], "")
+                link = title_to_link.get(a["source_video"], "")
+                if not link:
+                    for vt, vl in title_to_link.items():
+                        if a["source_video"] in vt or vt in a["source_video"]:
+                            link = vl
+                            break
+                a["video_link"] = link
+
+            # source_date 누락 시 보강
             if not a.get("source_date"):
                 a["source_date"] = title_to_date.get(a["source_video"], "")
+
             cleaned.append(a)
         return cleaned
     except Exception as e:
