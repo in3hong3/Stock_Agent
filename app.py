@@ -291,8 +291,8 @@ def render_tab_tracker():
             needs_refresh as _needs_refresh,
         )
 
-        # 자동 갱신: 6시간 이상 묵었으면 페이지 진입 시 한 번만 실행
-        if _needs_refresh(stale_hours=6) and not st.session_state.get("_video_refresh_attempted"):
+        # 자동 갱신: 24시간 이상 묵었으면 페이지 진입 시 한 번만 실행
+        if _needs_refresh(stale_hours=24) and not st.session_state.get("_video_refresh_attempted"):
             st.session_state["_video_refresh_attempted"] = True
             from utils.loading import ProgressBanner
             try:
@@ -341,7 +341,7 @@ def render_tab_tracker():
                 f"<div style='font-weight: 700; font-size: 1.05rem; margin-bottom: 6px;'>"
                 f"🎤 유튜버 타이밍 알림 "
                 f"<span style='font-size: 0.75rem; color: #94A3B8;'>"
-                f"(RAG 영상 분석 · 6시간마다 자동 갱신 · 마지막 {gen_label})</span></div>"
+                f"(RAG 영상 분석 · 하루 1회 자동 갱신 · 마지막 {gen_label})</span></div>"
                 f"{cards}"
                 f"</div>",
                 unsafe_allow_html=True,
