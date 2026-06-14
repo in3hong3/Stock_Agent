@@ -70,10 +70,29 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
     weekday = ["월", "화", "수", "목", "금", "토", "일"][datetime.now().weekday()]
 
     holdings_text = ""
+    tickers_for_events = []
     if holdings:
         tickers = [h.get("ticker", "") for h in holdings if h.get("ticker")]
+        tickers_for_events = tickers
         if tickers:
             holdings_text = f"내 보유 종목: {', '.join(tickers)}\n"
+
+    # 진짜 캘린더의 다가오는 이벤트 (실적/FOMC/CPI 등) — LLM이 이걸 사실 기준으로 사용
+    upcoming_events_text = "\n[향후 21일 실제 일정 — '이벤트 임박' 알림은 이 안에 있는 것만 쓸 것]\n"
+    try:
+        from modules.event_calendar import get_all_events, get_upcoming_events
+        all_events = get_all_events(tickers_for_events)
+        upcoming = get_upcoming_events(all_events, days=21)
+        if upcoming:
+            upcoming_events_text += "\n".join(
+                f"- {e['date'].strftime('%Y-%m-%d')} (D-{e['d_day']}) {e['title']}"
+                for e in upcoming[:15]
+            )
+        else:
+            upcoming_events_text += "(향후 21일 내 예정된 주요 일정 없음 — 이벤트 임박 알림 만들지 말 것)"
+    except Exception as e:
+        print(f"이벤트 목록 조회 실패: {e}")
+        upcoming_events_text = ""
 
     videos_text = "\n\n".join(
         f"[{i+1}] {v['title']}\n  채널: {v['channel']} | 업로드: {v['date']} | 종목: {v.get('ticker','-')}\n  요약: {v['text']}"
@@ -86,17 +105,20 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
     )
 
     user_prompt = f"""오늘 날짜: {today} ({weekday}요일)
-{holdings_text}
+{holdings_text}{upcoming_events_text}
+
 아래는 최근 90일간 유튜버 영상이야 (최신순):
 
 {videos_text}
 
-위 영상들에서 **오늘 이후 활성인 시점 알림**만 골라줘:
+위 영상들에서 **오늘({today}) 이후 활성인 시점 알림**만 골라줘:
 
-1. 🚨 **즉시 경고** — 최근 1~3일 영상에서 "오늘/내일/이번 주 장 시작 전" 류 단기 권고·경고
+1. 🚨 **즉시 경고** — 최근 1~3일 이내 영상에서 "오늘/내일/이번 주 장 시작 전" 류 단기 권고·경고
+   (영상이 4일 이상 묵었으면 그때의 "오늘/내일"은 이미 지난 날 — 알림으로 만들지 마라)
 2. ⏰ **시점 도래** — 과거 영상에서 'X월에', '여름에', '반년 후', '하반기' 등 언급한 시점이
-   지금~앞으로 2주 안에 도래하는 것 (가장 중요한 카테고리 — 가장 적극적으로 찾아라)
-3. 📅 **이벤트 임박** — 실적/FOMC/CPI/잡스리포트 등 임박한 이벤트(2주 이내) 관련 권고
+   **오늘({today})~앞으로 2주 안에** 도래하는 것 (가장 적극적으로 찾을 카테고리)
+3. 📅 **이벤트 임박** — 위 "실제 일정" 목록에 있는 이벤트에 대한 영상 속 권고만
+   (영상에서 "CPI 임박" 같은 말이 나와도 위 일정에 없거나 이미 지난 거면 만들지 마라)
 
 순수 JSON으로만 반환:
 {{
@@ -127,6 +149,11 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
 - 모호한 의견("그냥 좋다", "전망 밝다")은 제외 — 시점·행동 명확한 것만
 - 같은 종목·같은 주장 중복 금지
 - ticker/theme/video_link 없으면 null
+- ❗ **시점 검증 필수**: 영상 발언이 "이번 주", "내일" 같이 영상 시점 기준이면
+  영상일이 오늘({today})로부터 며칠 전인지 계산해서 그 시점이 지났는지 확인하라.
+  이미 지난 일에 대한 권고는 절대 알림으로 만들지 마라.
+- ❗ **이벤트 검증 필수**: CPI/FOMC/실적은 위의 '실제 일정' 목록과 대조해 검증.
+  목록에 없으면(=다음 일정이 없거나 21일 밖) 이벤트 임박 알림 만들지 마라.
 - 최대 10개. 정말 활성인 게 없으면 alerts:[]
 """
 
