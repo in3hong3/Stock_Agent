@@ -495,16 +495,24 @@ def render_tab_tracker():
         return fetch_ticker_news(ticker, max_news=6)
 
     if brief_clicked:
-        with st.spinner("모든 종목 뉴스 수집 + AI 브리핑 생성 중..."):
-            try:
+        from utils.loading import ProgressBanner
+        try:
+            with ProgressBanner(
+                title="전체 종목 이슈 브리핑 생성 중",
+                total=3, icon="🤖",
+            ) as banner:
+                banner.step(f"📰 {len(tickers)}개 종목 뉴스 수집 중...")
                 holdings_news = {t: cached_news(t) for t in tickers}
+                banner.step("✍️ AI가 종목별 이슈 분석 중...")
                 briefing = summarize_all_issues(holdings_news)
-                st.session_state.tracker_briefing = {
-                    "text": briefing,
-                    "time": datetime.datetime.now().strftime("%H:%M"),
-                }
-            except Exception as e:
-                st.error(f"❌ 브리핑 생성 실패: {e}")
+                banner.step("📋 브리핑 정리 중...")
+                banner.done("✅ 브리핑 생성 완료!")
+            st.session_state.tracker_briefing = {
+                "text": briefing,
+                "time": datetime.datetime.now().strftime("%H:%M"),
+            }
+        except Exception as e:
+            st.error(f"❌ 브리핑 생성 실패: {e}")
 
     if st.session_state.get("tracker_briefing"):
         b = st.session_state.tracker_briefing
@@ -539,16 +547,25 @@ def render_tab_tracker():
         if not get_search_provider():
             st.error("⚠️ 검색 LLM 키가 없습니다. .env에 PERPLEXITY_API_KEY를 설정하세요.")
         else:
-            with st.spinner(f"{PERSONAS[stance]['label']} 관점으로 뉴스 검색 + 평가 작성 중... (30초~1분)"):
-                try:
+            from utils.loading import ProgressBanner
+            try:
+                with ProgressBanner(
+                    title=f"{PERSONAS[stance]['label']} 관점으로 AI 평가서 생성 중",
+                    total=4, icon="🤖",
+                ) as banner:
+                    banner.step("📋 보유 종목 데이터 수집 중...")
+                    banner.step("💰 밸류에이션 지표 조회 중 (PER·PEG·목표가)...")
+                    banner.step("🔍 뉴스 웹 검색 중 (Perplexity)... (10~30초)")
                     result = get_or_create_eval(tracked, stance, force=bool(force_eval))
-                    st.session_state.portfolio_eval = {**result, "stance": stance}
-                    if result["cached"]:
-                        st.toast("📋 오늘 생성된 평가를 불러왔습니다 (API 호출 없음)")
-                    else:
-                        st.toast("✅ 평가서 생성 완료!")
-                except Exception as e:
-                    st.error(f"❌ 평가 생성 실패: {e}")
+                    banner.step("✍️ AI가 평가서 작성 중...")
+                    banner.done("✅ 평가서 생성 완료!")
+                st.session_state.portfolio_eval = {**result, "stance": stance}
+                if result["cached"]:
+                    st.toast("📋 오늘 생성된 평가를 불러왔습니다 (API 호출 없음)")
+                else:
+                    st.toast("✅ 평가서 생성 완료!")
+            except Exception as e:
+                st.error(f"❌ 평가 생성 실패: {e}")
 
     ev = st.session_state.get("portfolio_eval")
     if ev:
@@ -635,24 +652,33 @@ def render_tab_paper():
 
     # ── 1면 발행/증보 버튼 ──
     if st.button("🗞️ 오늘의 신문 발행 / 새 소식 반영", type="primary", use_container_width=True):
-        with st.spinner("📰 기사 수집 및 편집 중... (뉴스 + 공시 + 매크로)"):
-            try:
+        from utils.loading import ProgressBanner
+        try:
+            with ProgressBanner(
+                title="오늘의 신문 발행 중",
+                total=5, icon="🗞️",
+            ) as banner:
+                banner.step("📊 매크로 지표 수집 중 (VIX, S&P500, 달러)...")
                 macro = paper_macro()
+                banner.step("📰 종목별 뉴스 수집 중...")
                 news = paper_news(tuple(tickers))
+                banner.step("📋 SEC 공시 조회 중...")
                 filings = paper_filings(tuple(tickers))
+                banner.step("✍️ AI 편집장이 1면 작성 중... (30~60초)")
                 result = publish_daily_paper(macro, news, filings, holdings=holdings)
-                st.session_state.daily_paper = result
+                banner.done("✅ 신문 발행 완료!")
+            st.session_state.daily_paper = result
 
-                engine = result.get("engine", "")
-                engine_label = f" ({engine.split('-')[0].title()} 웹검색 🔍)" if engine.endswith("websearch") else ""
-                if result["status"] == "unchanged":
-                    st.toast("📰 새 소식이 없어 기존 신문을 유지합니다 (토큰 절약)")
-                elif result["status"] == "updated":
-                    st.toast(f"📰 개정판 발행!{engine_label}")
-                else:
-                    st.toast(f"🗞️ 오늘의 신문이 발행되었습니다{engine_label}")
-            except Exception as e:
-                st.error(f"❌ 신문 발행 실패: {e}")
+            engine = result.get("engine", "")
+            engine_label = f" ({engine.split('-')[0].title()} 웹검색 🔍)" if engine.endswith("websearch") else ""
+            if result["status"] == "unchanged":
+                st.toast("📰 새 소식이 없어 기존 신문을 유지합니다 (토큰 절약)")
+            elif result["status"] == "updated":
+                st.toast(f"📰 개정판 발행!{engine_label}")
+            else:
+                st.toast(f"🗞️ 오늘의 신문이 발행되었습니다{engine_label}")
+        except Exception as e:
+            st.error(f"❌ 신문 발행 실패: {e}")
 
     # 앱 재시작 후에도 오늘 신문 복원
     if "daily_paper" not in st.session_state:
@@ -1656,19 +1682,25 @@ def render_tab_portfolio():
     col3, col4 = st.columns(2)
     with col3:
         if st.button("📡 가격 업데이트", use_container_width=True, help="yfinance로 실시간 가격 업데이트"):
-            with st.spinner("가격 업데이트 중..."):
-                try:
+            from utils.loading import ProgressBanner
+            try:
+                with ProgressBanner(
+                    title=f"{len(edited_df)}개 종목 실시간 가격 조회 중",
+                    total=2, icon="📡",
+                ) as banner:
+                    banner.step("yfinance에 시세 요청 중...")
                     from utils.price_updater import PriceUpdater
                     updater = PriceUpdater()
                     updated_df = updater.update_portfolio_prices(edited_df, delay_seconds=0.3)
+                    banner.step("CSV에 저장 중...")
                     updater.save_portfolio(updated_df, PORTFOLIO_FILE)
-                    st.session_state.df_portfolio = updated_df
-                    st.session_state.reload_csv = True
-                    _save_price_timestamp()
-                    st.success("✅ 가격 업데이트 완료!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ 가격 업데이트 실패: {e}")
+                    banner.done("✅ 가격 업데이트 완료!")
+                st.session_state.df_portfolio = updated_df
+                st.session_state.reload_csv = True
+                _save_price_timestamp()
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 가격 업데이트 실패: {e}")
     with col4:
         if st.button("🚀 분석 실행", type="secondary", use_container_width=True):
             with st.spinner("포트폴리오 분석 중..."):
