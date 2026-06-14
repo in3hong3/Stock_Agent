@@ -154,6 +154,10 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
   이미 지난 일에 대한 권고는 절대 알림으로 만들지 마라.
 - ❗ **이벤트 검증 필수**: CPI/FOMC/실적은 위의 '실제 일정' 목록과 대조해 검증.
   목록에 없으면(=다음 일정이 없거나 21일 밖) 이벤트 임박 알림 만들지 마라.
+- ❗ **출처 영상 필수**: 모든 알림은 위 영상 목록 중 하나에서 나온 발언이어야 한다.
+  영상에 직접 언급이 없는 일정만으로 알림을 만들지 마라 (예: "FOMC가 있다"는 캘린더 사실만으로는 NO,
+  "X 유튜버가 FOMC 앞두고 매도 권고"처럼 영상 속 권고가 있을 때만 OK).
+  source_video, source_date, video_link는 반드시 채울 것.
 - 최대 10개. 정말 활성인 게 없으면 alerts:[]
 """
 
@@ -173,11 +177,18 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
 
         # video_link 매핑 (LLM이 누락하면 영상 제목으로 검색해서 보강)
         title_to_link = {v["title"]: v["link"] for v in videos}
+        title_to_date = {v["title"]: v["date"] for v in videos}
+        cleaned = []
         for a in alerts:
-            if not a.get("video_link") and a.get("source_video"):
+            # 출처 영상이 없는 알림은 신뢰도 낮음 → 제외
+            if not a.get("source_video"):
+                continue
+            if not a.get("video_link"):
                 a["video_link"] = title_to_link.get(a["source_video"], "")
-
-        return alerts
+            if not a.get("source_date"):
+                a["source_date"] = title_to_date.get(a["source_video"], "")
+            cleaned.append(a)
+        return cleaned
     except Exception as e:
         print(f"알림 추출 실패: {e}")
         return []
