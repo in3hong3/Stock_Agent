@@ -686,6 +686,31 @@ def render_tab_paper():
         if saved:
             st.session_state.daily_paper = saved
 
+    # ── 🌅 자동 발행: 오늘 신문이 아직 없으면 한 번 자동 생성 ──
+    if (not st.session_state.get("daily_paper")
+            and tickers
+            and not st.session_state.get("_auto_paper_attempted")):
+        st.session_state["_auto_paper_attempted"] = True
+        from utils.loading import ProgressBanner
+        try:
+            with ProgressBanner(
+                title="오늘의 신문 자동 발행 중 (첫 진입)",
+                total=5, icon="🌅",
+            ) as banner:
+                banner.step("📊 매크로 지표 수집 중...")
+                macro_a = paper_macro()
+                banner.step("📰 종목별 뉴스 수집 중...")
+                news_a = paper_news(tuple(tickers))
+                banner.step("📋 SEC 공시 조회 중...")
+                filings_a = paper_filings(tuple(tickers))
+                banner.step("✍️ AI 편집장이 1면 작성 중... (30~60초)")
+                result_a = publish_daily_paper(macro_a, news_a, filings_a, holdings=holdings)
+                banner.done("✅ 자동 발행 완료!")
+            st.session_state.daily_paper = result_a
+            st.toast("🌅 오늘의 신문이 자동 발행되었습니다")
+        except Exception as e:
+            st.warning(f"⚠️ 자동 발행 실패: {e} — 위 '발행' 버튼으로 수동 시도해주세요.")
+
     # 매크로 1개월 추세 (구 '시장' 탭 흡수)
     with st.expander("📊 매크로 지표 상세 (1개월 추세 차트)", expanded=False):
         render_macro_grid()
@@ -716,7 +741,9 @@ def render_tab_paper():
         paper = st.session_state.get("daily_paper")
         if paper:
             st.markdown(
-                f"<span style='font-size:0.75rem;color:#64748B;'>발행 {paper['time']} · AI 편집</span>",
+                f"<span style='font-size:0.75rem;color:#64748B;'>"
+                f"📅 {datetime.date.today().strftime('%Y.%m.%d')} 발행 {paper['time']} · AI 편집 · "
+                f"<span style='color:#00FFA3;'>오늘 종일 유지됩니다</span></span>",
                 unsafe_allow_html=True,
             )
             st.markdown(paper["front"])
