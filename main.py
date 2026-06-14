@@ -66,6 +66,7 @@ class MarketDataCollector:
     TICKERS = {
         'kospi': '^KS11',
         'nasdaq': '^IXIC',
+        'sp500': '^GSPC',
         'krw_usd': 'KRW=X',
         'samsung': '005930.KS',
         'tesla': 'TSLA',
@@ -596,7 +597,7 @@ class SheetLogger:
             today_date = datetime.datetime.now().strftime("%Y-%m-%d")
             
             if not existing_data:
-                header = ["수집일시", "CNN지수", "CNN상태", "코스피", "나스닥", "원달러환율", "삼성전자", "테슬라", "엔비디아", "비트코인"]
+                header = ["수집일시", "CNN지수", "CNN상태", "코스피", "나스닥", "S&P500", "원달러환율", "삼성전자", "테슬라", "엔비디아", "비트코인"]
                 worksheet.append_row(header)
                 existing_dates = set()
             else:
@@ -787,6 +788,7 @@ def update_market_log():
         fear_status,
         market_data.get('kospi', 'N/A'),
         market_data.get('nasdaq', 'N/A'),
+        market_data.get('sp500', 'N/A'),
         market_data.get('krw_usd', 'N/A'),
         market_data.get('samsung', 'N/A'),
         market_data.get('tesla', 'N/A'),

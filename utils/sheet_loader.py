@@ -102,7 +102,7 @@ class SheetDataLoader:
             df['수집일시'] = pd.to_datetime(df['수집일시'], errors='coerce')
         
         # 숫자 컬럼 변환
-        numeric_columns = ['CNN지수', '코스피', '나스닥', '원달러환율', '삼성전자', '테슬라', '엔비디아', '비트코인']
+        numeric_columns = ['CNN지수', '코스피', '나스닥', 'S&P500', '원달러환율', '삼성전자', '테슬라', '엔비디아', '비트코인']
         for col in numeric_columns:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -147,6 +147,33 @@ class SheetDataLoader:
             return df_filtered
         
         return df
+
+
+    def get_last_data_info(self):
+        """Youtube_Log와 Market_Log의 최신 데이터 날짜 확인"""
+        info = {
+            "youtube_date": "N/A",
+            "market_date": "N/A"
+        }
+        
+        try:
+            # YouTube 최신 날짜 (업로드일자 기준)
+            yt_df = self.load_youtube_data()
+            if not yt_df.empty and '업로드일자' in yt_df.columns:
+                latest_yt = yt_df['업로드일자'].max()
+                if pd.notna(latest_yt):
+                    info["youtube_date"] = latest_yt.strftime("%Y-%m-%d")
+            
+            # 시장 데이터 최신 날짜 (수집일시 기준)
+            mk_df = self.load_market_data()
+            if not mk_df.empty and '수집일시' in mk_df.columns:
+                latest_mk = mk_df['수집일시'].max()
+                if pd.notna(latest_mk):
+                    info["market_date"] = latest_mk.strftime("%Y-%m-%d")
+        except Exception as e:
+            print(f"Error checking last data info: {e}")
+            
+        return info
 
 
 if __name__ == "__main__":

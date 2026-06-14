@@ -233,6 +233,16 @@ class PineconeStore:
             return result['vectors'][doc_id]['metadata'].get('text', '')
         return ""
 
+    def get_raw_texts(self, doc_ids: List[str]) -> Dict[str, str]:
+        """여러 doc_id의 원본 텍스트를 한 번의 요청으로 가져오기 (왕복 절약)"""
+        if not doc_ids:
+            return {}
+        result = self.index.fetch(ids=list(set(doc_ids)), namespace=PINECONE_NAMESPACE_RAW)
+        return {
+            doc_id: vec['metadata'].get('text', '')
+            for doc_id, vec in result['vectors'].items()
+        }
+
     def delete_all(self):
         """인덱스의 모든 데이터 삭제 (초기화용)"""
         self.index.delete(delete_all=True, namespace=PINECONE_NAMESPACE_SUMMARY)

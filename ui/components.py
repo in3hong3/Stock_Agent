@@ -57,42 +57,64 @@ def render_agent_selector() -> List[str]:
 
 def render_market_summary():
     """시장 현황 요약 표시"""
-    from ui.theme import get_cached_market_data
+    from ui.theme import get_realtime_market_summary
     
     st.subheader("📊 시장 현황")
-    market_df = get_cached_market_data()
+    market_df = get_realtime_market_summary()
     
     if market_df is not None and not market_df.empty:
-        latest_market = market_df.iloc[-1]
-        st.metric("코스피", f"{latest_market.get('코스피', 'N/A')}")
-        st.metric("나스닥", f"{latest_market.get('나스닥', 'N/A')}")
-        st.metric("원/달러", f"{latest_market.get('원달러환율', 'N/A')}")
+        # 주요 지수 필터링
+        indices = ["코스피", "나스닥", "S&P 500", "원달러환율"]
+        
+        for idx_name in indices:
+            row = market_df[market_df['종목'] == idx_name]
+            if not row.empty:
+                val = row.iloc[0]['현재가']
+                change = row.iloc[0]['등락']
+                label = idx_name
+                if idx_name == "원달러환율":
+                    val_str = f"₩{val:,.1f}"
+                else:
+                    val_str = f"{val:,.2f}"
+                st.metric(label, val_str, change)
     else:
         st.write("시장 데이터를 불러올 수 없습니다.")
 
 
 def render_ticker_tape():
     """상단 티커 테이프 표시"""
-    from ui.theme import get_cached_market_data
-    market_df = get_cached_market_data()
+    from ui.theme import get_realtime_market_summary
+    market_df = get_realtime_market_summary()
     
-    cols = st.columns(5)
+    # 7개 지수 표시 (공포탐욕, 다우, S&P500, 나스닥, 코스피, 환율, 비트코인)
+    cols = st.columns(7)
+    
+    indices = ["공포/탐욕", "다우존스", "S&P 500", "나스닥", "코스피", "원달러환율", "비트코인"]
+    labels = ["Fear & Greed", "DOW", "S&P 500", "NASDAQ", "KOSPI", "USD/KRW", "Bitcoin"]
     
     if market_df is not None and not market_df.empty:
-        latest = market_df.iloc[-1]
-        # 실제 데이터 바인딩 (데이터 시트에 해당 컬럼이 있다고 가정)
-        cols[0].metric("S&P 500", latest.get("S&P500", "5,123"), "+0.8%")
-        cols[1].metric("NASDAQ", latest.get("나스닥", "16,152"), "+1.2%")
-        cols[2].metric("KOSPI", latest.get("코스피", "2,607"), "-0.5%")
-        cols[3].metric("USD/KRW", latest.get("원달러환율", "1,326"), "-2.5")
-        cols[4].metric("Bitcoin", latest.get("비트코인", "$68,200"), "+3.1%")
+        for i, (idx_name, label) in enumerate(zip(indices, labels)):
+            row = market_df[market_df['종목'] == idx_name]
+            if not row.empty:
+                val = row.iloc[0]['현재가']
+                change = row.iloc[0]['등락']
+                
+                # 포맷팅
+                if idx_name == "공포/탐욕":
+                    val_str = f"{val:.0f}"
+                elif idx_name == "원달러환율":
+                    val_str = f"{val:,.1f}"
+                elif idx_name == "비트코인":
+                    val_str = f"${val:,.0f}"
+                else:
+                    val_str = f"{val:,.0f}" if val > 1000 else f"{val:,.2f}"
+                
+                cols[i].metric(label, val_str, change)
+            else:
+                cols[i].metric(label, "N/A", "0.00%")
     else:
-        # 데이터 없을 경우 예시 데이터
-        cols[0].metric("S&P 500", "5,123.41", "+0.8%")
-        cols[1].metric("NASDAQ", "16,152.08", "+1.2%")
-        cols[2].metric("KOSPI", "2,607.27", "-0.5%")
-        cols[3].metric("USD/KRW", "1,326.88", "-2.5")
-        cols[4].metric("Bitcoin", "$68,200", "+3.1%")
+        for i, label in enumerate(labels):
+            cols[i].metric(label, "N/A", "0.00%")
 
 
 def render_fear_greed_gauge(fg_value):
@@ -161,73 +183,101 @@ def render_login_page():
     """전문적인 다크 모드 로그인 페이지 렌더링"""
     st.markdown("""
     <style>
-        .login-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background-color: #0E1117;
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        html, body, [class*="st-"] {
+            font-family: 'Pretendard', 'Inter', -apple-system, sans-serif !important;
         }
-        .login-card {
-            background-color: #1A1C24;
-            padding: 40px;
-            border-radius: 24px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            width: 400px;
-            border: 1px solid rgba(255,255,255,0.05);
-            text-align: center;
-        }
-        .login-header {
-            font-size: 28px;
-            font-weight: 800;
-            margin-bottom: 8px;
-            color: #FFFFFF;
-            letter-spacing: -0.02em;
-        }
-        .login-subtitle {
-            font-size: 14px;
-            color: #94A3B8;
-            margin-bottom: 32px;
+        .stApp { background-color: #0E1117; }
+        #MainMenu, footer { visibility: hidden; }
+        header[data-testid="stHeader"] { background: transparent !important; }
+
+        /* 로그인 폼을 카드처럼 */
+        [data-testid="stForm"] {
+            background: linear-gradient(170deg, #1A1C24 0%, #14161D 100%);
+            padding: 36px 32px !important;
+            border-radius: 20px !important;
+            border: 1px solid rgba(255,255,255,0.07) !important;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
         .stTextInput input {
             height: 48px !important;
             border-radius: 12px !important;
+            background-color: #0E1117 !important;
+            color: #FFFFFF !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            transition: border-color 0.15s ease;
         }
-        .stButton button {
+        .stTextInput input:focus {
+            border-color: #00FFA3 !important;
+            box-shadow: 0 0 0 1px #00FFA355 !important;
+        }
+        .stTextInput label { color: #94A3B8 !important; font-size: 13px !important; }
+        .stFormSubmitButton button {
             width: 100% !important;
             height: 48px !important;
             border-radius: 12px !important;
             font-weight: 700 !important;
             margin-top: 10px !important;
+            background: linear-gradient(90deg, #00FFA3, #00D9F5) !important;
+            color: #0E1117 !important;
+            border: none !important;
+            transition: filter 0.15s ease, transform 0.15s ease;
+        }
+        .stFormSubmitButton button:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+        .login-logo {
+            text-align: center;
+            font-size: 44px;
+            margin-bottom: 4px;
+        }
+        .login-header {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            text-align: center;
+            letter-spacing: -0.02em;
+            background: linear-gradient(90deg, #FFFFFF 40%, #00FFA3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .login-subtitle {
+            font-size: 14px;
+            color: #94A3B8;
+            margin-bottom: 28px;
+            text-align: center;
         }
     </style>
     """, unsafe_allow_html=True)
 
-    # 중앙 정렬을 위한 빈 컬럼 활용
-    _, col, _ = st.columns([1, 2, 1])
+    _, col, _ = st.columns([1, 1.2, 1])
 
     with col:
-        st.write("") # 스페이서
         st.write("")
-        
-        with st.container():
-            st.markdown('<div class="login-header">Stock Agent Terminal</div>', unsafe_allow_html=True)
-            st.markdown('<div class="login-subtitle">전문 투자 분석을 위한 멀티 에이전트 시스템</div>', unsafe_allow_html=True)
-            
-            with st.form("login_form"):
-                username = st.text_input("Username")
-                password = st.text_input("Password", type="password")
-                submit = st.form_submit_button("Sign In")
-                
-                if submit:
-                    if username == "admin" and password == "admin":
-                        st.session_state.authenticated = True
-                        st.success("로그인 성공!")
-                        st.rerun()
-                    else:
-                        st.error("계정 정보가 일치하지 않습니다.")
-        
+        st.write("")
+        st.write("")
+
+        st.markdown('<div class="login-logo">📊</div>', unsafe_allow_html=True)
+        st.markdown('<div class="login-header">Stock Agent Terminal</div>', unsafe_allow_html=True)
+        st.markdown('<div class="login-subtitle">전문 투자 분석을 위한 멀티 에이전트 시스템</div>', unsafe_allow_html=True)
+
+        with st.form("login_form"):
+            username = st.text_input("Username", placeholder="아이디를 입력하세요")
+            password = st.text_input("Password", type="password", placeholder="비밀번호를 입력하세요")
+            submit = st.form_submit_button("Sign In")
+
+            if submit:
+                import os
+                valid_user = os.getenv("APP_USERNAME", "admin")
+                valid_pass = os.getenv("APP_PASSWORD", "admin")
+                if username == valid_user and password == valid_pass:
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("계정 정보가 일치하지 않습니다.")
+
         st.markdown("""
         <div style="text-align: center; margin-top: 20px; color: #475569; font-size: 12px;">
             © 2026 Stock Agent Terminal. All rights reserved.

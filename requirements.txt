@@ -18,3 +18,4 @@ plotly
 scipy
 rank_bm25
 pinecone
+anthropic

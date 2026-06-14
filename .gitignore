@@ -1,5 +1,7 @@
-# Environment variables
+# API Keys and Secrets
 .env
+*.json
+*.key
 
 # Python
 __pycache__/
@@ -11,17 +13,14 @@ env/
 venv/
 ENV/
 
-# JSON (Excluding config json if needed)
-# Be careful: this ignores all json files including service account keys and local configs.
-*.json
-
-# Project specific
+# Data and Logs
 data/
 logs/
+*.sqlite3
 .pytest_cache/
+
+# OS/IDE Files
 .vscode/
 .idea/
-
-# OS files
 .DS_Store
 Thumbs.db

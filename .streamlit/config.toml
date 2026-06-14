@@ -1,0 +1,12 @@
+# Streamlit 네이티브 다크 테마
+# CSS가 닿지 않는 위젯 내부(드롭다운, 달력, 데이터 에디터, 토스트 등)까지
+# 다크 모드로 통일해 글씨/배경 대비 문제를 근본적으로 해결한다.
+[theme]
+base = "dark"
+primaryColor = "#00FFA3"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1A1C24"
+textColor = "#E2E8F0"
+
+[server]
+headless = true

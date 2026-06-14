@@ -46,14 +46,42 @@ class NewsAgent(BaseAgent):
             
             news_list = []
             for item in news_data[:max_news]:
+                # yfinance 0.2.4x+ 신규 포맷: 'content' 하위에 데이터 존재
+                content = item.get('content', item)
+
+                title = content.get('title', 'N/A')
+
+                # 링크: 신규 포맷은 canonicalUrl/clickThroughUrl, 구버전은 link
+                link = item.get('link') or '#'
+                if link == '#':
+                    for url_key in ('canonicalUrl', 'clickThroughUrl'):
+                        url_obj = content.get(url_key)
+                        if isinstance(url_obj, dict) and url_obj.get('url'):
+                            link = url_obj['url']
+                            break
+
+                # 출처
+                publisher = item.get('publisher', 'N/A')
+                if publisher == 'N/A':
+                    provider = content.get('provider')
+                    if isinstance(provider, dict):
+                        publisher = provider.get('displayName', 'N/A')
+
+                # 발행 시각
+                published = 'N/A'
+                if item.get('providerPublishTime'):
+                    published = datetime.fromtimestamp(item['providerPublishTime']).strftime('%Y-%m-%d %H:%M')
+                elif content.get('pubDate'):
+                    published = str(content['pubDate'])[:16].replace('T', ' ')
+
                 news_list.append({
-                    'title': item.get('title', 'N/A'),
-                    'publisher': item.get('publisher', 'N/A'),
-                    'link': item.get('link', '#'),
-                    'published': datetime.fromtimestamp(item.get('providerPublishTime', 0)).strftime('%Y-%m-%d %H:%M') if item.get('providerPublishTime') else 'N/A',
-                    'thumbnail': item.get('thumbnail', {}).get('resolutions', [{}])[0].get('url', '') if item.get('thumbnail') else ''
+                    'title': title,
+                    'publisher': publisher,
+                    'link': link,
+                    'published': published,
+                    'thumbnail': '',
                 })
-            
+
             return news_list
             
         except Exception as e:

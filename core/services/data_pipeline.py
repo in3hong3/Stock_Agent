@@ -98,34 +98,41 @@ class DataPipeline:
             transcript_result = self.yt_manager.get_transcript(video['video_id'])
             
             transcript_list_parsed = []
+            is_description_fallback = False  # 영상 설명 대체 여부 플래그
+
             if transcript_result and transcript_result[0]:
                 transcript_text, timestamps_json = transcript_result
                 
-                if timestamps_json and timestamps_json != "[]":
-                    try:
-                        transcript_list_parsed = json.loads(timestamps_json)
-                    except json.JSONDecodeError:
-                        pass
+                # 영상 설명으로 대체된 경우 플래그 설정
+                if transcript_text.startswith("[영상 설명으로 대체]"):
+                    is_description_fallback = True
+                    update_status(f"   ⚠️ 영상 설명 대체 (Pinecone 제외): {video['title'][:40]}")
+                else:
+                    if timestamps_json and timestamps_json != "[]":
+                        try:
+                            transcript_list_parsed = json.loads(timestamps_json)
+                        except json.JSONDecodeError:
+                            pass
                 
                 # 시트 저장 용량 제한 대비
                 if len(transcript_text) > 50000:
                     transcript_text = transcript_text[:50000]
                 
-                # 종목 추출 매칭 엔진
-                stocks = self.stock_extractor.extract_stocks_from_transcript(transcript_text, video['title'])
-                
-                if stocks:
-                    for stock in stocks:
-                        stock_row = [
-                            video['title'],
-                            video['channel_title'],
-                            video['publish_time'].split('T')[0],
-                            stock['종목명'],
-                            stock['ticker'],
-                            stock['market'],
-                            video['url']
-                        ]
-                        stock_mentions_to_log.append(stock_row)
+                # 자막이 정상인 경우에만 종목 추출
+                if not is_description_fallback:
+                    stocks = self.stock_extractor.extract_stocks_from_transcript(transcript_text, video['title'])
+                    if stocks:
+                        for stock in stocks:
+                            stock_row = [
+                                video['title'],
+                                video['channel_title'],
+                                video['publish_time'].split('T')[0],
+                                stock['종목명'],
+                                stock['ticker'],
+                                stock['market'],
+                                video['url']
+                            ]
+                            stock_mentions_to_log.append(stock_row)
                 
                 success_count += 1
             else:
@@ -147,6 +154,7 @@ class DataPipeline:
             data_to_log.append({
                 'row': row,
                 'transcript_list': transcript_list_parsed,
+                'is_description_fallback': is_description_fallback,  # DB 제외 플래그
             })
             existing_urls.add(video['url'])
             
@@ -163,9 +171,11 @@ class DataPipeline:
         if success_count > 0:
             update_status("🤖 LLM 정제 중... (GPT-4o-mini가 [종목/관점/근거]를 추출합니다)")
             try:
+                # 자막 없음 & 영상 설명 대체본 모두 Pinecone 제외
                 new_data_for_embedding = [
                     e for e in data_to_log
                     if e['row'][3] != "자막 없음 (자동 자막 미지원)"
+                    and not e.get('is_description_fallback', False)
                 ]
                 
                 if new_data_for_embedding:

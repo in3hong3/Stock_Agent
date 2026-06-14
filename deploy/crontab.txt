@@ -1,0 +1,14 @@
+# crontab 설정 — `crontab -e`로 열고 아래 내용 추가
+# 서버 시간이 UTC라면 한국시간(KST) = UTC+9 (예: KST 07:00 = UTC 22:00)
+
+# 1) 매일 아침 7시 (KST) 데이터 수집 — 유튜브 영상 + 시장 지표
+0 22 * * * cd /home/ubuntu/stock-agent && .venv/bin/python daily_smart_collect.py >> logs/collect.log 2>&1
+
+# 2) 매일 아침 7시 30분 (KST) 미장 브리핑 이메일
+30 22 * * * cd /home/ubuntu/stock-agent && .venv/bin/python daily_briefing.py >> logs/briefing.log 2>&1
+
+# 3) 30분마다 가격 알림 체크 (미국 장중: KST 23:30~06:00 = UTC 14:30~21:00)
+*/30 14-21 * * 1-5 cd /home/ubuntu/stock-agent && .venv/bin/python check_alerts.py >> logs/alerts.log 2>&1
+
+# 로그 정리 (매주 일요일, 30일 이상된 로그 삭제)
+0 0 * * 0 find /home/ubuntu/stock-agent/logs -name "*.log" -mtime +30 -delete

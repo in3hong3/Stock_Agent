@@ -1,0 +1,68 @@
+/* Mobile responsive CSS for Stock Agent Streamlit app */
+/* Dark theme color variables */
+:root {
+  --bg-primary: #0E1117;
+  --bg-card: rgba(255, 255, 255, 0.02);
+  --text-primary: #FFFFFF;
+  --text-secondary: #94A3B8;
+  --accent-primary: #00FFA3;
+  --accent-secondary: #00D9F5;
+}
+
+/* Apply dark background globally */
+.stApp {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Glass‑morphism cards for each tab content */
+.mobile-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* Mobile navigation bar */
+.mobile-nav {
+  position: sticky;
+  top: 0;
+  background: var(--bg-primary);
+  z-index: 999;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.mobile-nav button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.mobile-nav button.active {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+/* Responsive layout */
+@media (max-width: 768px) {
+  /* Stack columns vertically */
+  .stColumns > div {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  /* Increase touch target size */
+  .stButton button, .stSelectbox, .stTextInput input {
+    min-height: 48px;
+    font-size: 1rem;
+  }
+  /* Hide the default sidebar toggle (if any) */
+  [data-testid="stSidebar"] {
+    display: none;
+  }
+}

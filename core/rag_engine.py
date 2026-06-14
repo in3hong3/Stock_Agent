@@ -120,14 +120,14 @@ class RAGEngine:
                             if mr['id'] not in existing_ids:
                                 results.append(mr)
                     
+                    # 원문 일괄 fetch (문서당 1회 왕복 → 전체 1회)
+                    doc_ids = [r['metadata'].get('doc_id') for r in results if r['metadata'].get('doc_id')]
+                    raw_map = self.vector_store.get_raw_texts(doc_ids)
                     final_docs = []
                     for res in results:
                         doc_id = res['metadata'].get('doc_id')
-                        if doc_id:
-                            raw_text = self.vector_store.get_raw_text(doc_id)
-                            res['page_content'] = raw_text if raw_text else res['text']
-                        else:
-                            res['page_content'] = res.get('text', '')
+                        raw_text = raw_map.get(doc_id, '') if doc_id else ''
+                        res['page_content'] = raw_text if raw_text else res.get('text', '')
                         final_docs.append(res)
                 else:
                     # ChromaDB 검색
@@ -145,13 +145,12 @@ class RAGEngine:
                     print(f"  [RAG] No results with date_filter {date_filter}. Retrying without date_filter...")
                     if VECTOR_DB_TYPE == "pinecone":
                         results = self.vector_store.search_summaries(query, k=top_k)
+                        doc_ids = [r['metadata'].get('doc_id') for r in results if r['metadata'].get('doc_id')]
+                        raw_map = self.vector_store.get_raw_texts(doc_ids)
                         for res in results:
                             doc_id = res['metadata'].get('doc_id')
-                            if doc_id:
-                                raw_text = self.vector_store.get_raw_text(doc_id)
-                                res['page_content'] = raw_text if raw_text else res['text']
-                            else:
-                                res['page_content'] = res.get('text', '')
+                            raw_text = raw_map.get(doc_id, '') if doc_id else ''
+                            res['page_content'] = raw_text if raw_text else res.get('text', '')
                             final_docs.append(res)
                     else:
                         results = self.vector_store.search_summaries(query, k=top_k)
@@ -305,29 +304,16 @@ class RAGEngine:
             if source_info not in sources:
                 sources.append(source_info)
 
-        import random
-        # 매번 다른 형태의 답변을 생성하기 위해 무작위로 스타일을 지정합니다.
-        styles = [
-            "인터뷰 형식(대화하듯 부드럽게)",
-            "논문/보고서 형식(목차를 나누고 매우 딱딱하고 전문적으로)",
-            "스토리텔링 형식(하나의 흐름을 가진 이야기처럼 자연스럽게)",
-            "핵심 포인트 중심 형식(불릿 포인트를 적극 사용하여 핵심만 강타하듯)",
-            "Q&A 형식(자체적으로 질문을 던지고 답하는 방식)"
-        ]
-        selected_style = random.choice(styles)
-
-        system_prompt = f"""당신은 전문 주식 분석가이자 투자 어시스턴트입니다. 
-제공된 [참고 문서]들의 내용을 바탕으로 사용자의 질문에 깊이 있고 아주 상세한 답변을 작성하세요.
+        system_prompt = f"""당신은 전문 주식 분석가이자 투자 어시스턴트입니다.
+제공된 [참고 문서]들의 내용을 바탕으로 사용자의 질문에 깊이 있는 답변을 작성하세요.
 
 **답변 원칙**:
-1. **풍부하고 구체적인 분석**: 단순히 짧게 요약만 하지 말고, 문서에 등장하는 핵심 논거, 목표가, 매매 시나리오, 긍정/부정적 요인 등을 최대한 논리적이고 자세하게 서술하세요. 내용이 부실해 보이지 않도록 깊이 있는 인사이트를 제공해야 합니다.
-2. **다각도 비교**: 여러 문서에서 상충되거나 보완되는 의견이 있다면, 이를 비교 대조하여 투자자가 입체적으로 판단할 수 있게 돕습니다.
-3. **근거 중심**: 문서에 없는 수치나 사실을 지어내지 마세요.
-4. **출처 인용**: 답변의 각 주요 주장 뒤에 근거 문서 번호(예: [1], [2])를 기재하세요.
-5. **솔직함**: 관련 내용이 문서에 없다면 "제공된 정보 내에서는 확인할 수 없습니다"라고 명확히 안내하세요.
-
-🔥 **특별 지시사항 (문체/형식)**:
-이번 답변은 반드시 **{selected_style}**으로 작성하세요. 매번 똑같은 서론과 결론을 사용하지 말고, 선택된 스타일에 완전히 몰입해서 신선하게 답변을 전개하세요.
+1. **질문에 직접 답하기**: 첫 문단에서 질문에 대한 핵심 결론부터 제시하고, 그 다음 근거를 풀어가세요. 자문자답(Q&A) 형식은 금지합니다.
+2. **풍부하고 구체적인 분석**: 문서에 등장하는 핵심 논거, 목표가, 매매 시나리오, 긍정/부정적 요인을 논리적으로 서술하세요. 핵심 항목은 불릿 포인트를 활용해 읽기 쉽게.
+3. **시점 명시**: 유튜버 발언은 영상 날짜 기준 과거 시점의 의견입니다. "X월 X일 영상에서 ~라고 했다"처럼 시점을 밝혀, 현재 사실처럼 들리지 않게 하세요.
+4. **다각도 비교**: 여러 문서에서 상충되거나 보완되는 의견이 있다면 비교 대조하세요.
+5. **근거 중심**: 문서에 없는 수치나 사실을 지어내지 마세요. 각 주요 주장 뒤에 근거 문서 번호(예: [1], [2])를 기재하세요.
+6. **솔직함**: 관련 내용이 문서에 없다면 "제공된 정보 내에서는 확인할 수 없습니다"라고 명확히 안내하세요.
 
 오늘 날짜: {datetime.date.today().strftime('%Y-%m-%d')}
 """
@@ -435,12 +421,16 @@ class RAGEngine:
             sources = []
             for doc in retrieved_docs:
                 meta = doc['metadata']
+                # Pinecone은 score(유사도), ChromaDB는 distance(거리)를 반환
+                sim = doc.get('score')
+                if sim is None:
+                    sim = 1 - doc.get('distance', 1.0)
                 sources.append({
                     '영상제목': meta.get('영상제목', 'N/A'),
                     '채널명': meta.get('채널명', 'N/A'),
                     '영상링크': meta.get('영상링크', 'N/A'),
                     '업로드일자': meta.get('업로드일자', 'N/A'),
-                    '유사도': round(1 - doc.get('distance', 1.0), 3)  # distance가 없을 경우 0으로 처리
+                    '유사도': round(float(sim), 3)
                 })
             
             # 4. 후속 질문 생성

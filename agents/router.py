@@ -173,11 +173,10 @@ class AgenticRouter:
         results = {}
         for ticker in tickers:
             try:
-                stock_data, analysis = self.quant_agent.analyze_stock(ticker=ticker)
+                stock_data = self.quant_agent.fetch_stock_data(ticker=ticker)
                 results[ticker] = {
                     "success": True,
                     "stock_data": stock_data,
-                    "analysis": analysis
                 }
             except Exception as e:
                 logger.error(f"[Router] Quant 에이전트 호출 실패 ({ticker}): {e}")
@@ -481,15 +480,16 @@ class AgenticRouter:
 # ──────────────────────────────────────────────
 # 4. 간편 헬퍼 함수 (app.py에서 바로 사용 가능)
 # ──────────────────────────────────────────────
-_router_instance: Optional[AgenticRouter] = None
-
-
 def get_router() -> AgenticRouter:
-    """싱글톤 라우터 인스턴스 반환 (Streamlit 세션에서 반복 초기화 방지)"""
-    global _router_instance
-    if _router_instance is None:
-        _router_instance = AgenticRouter()
-    return _router_instance
+    """Streamlit 세션별 라우터 인스턴스 반환 (세션 간 상태 오염 방지)"""
+    try:
+        import streamlit as st
+        if "agentic_router" not in st.session_state:
+            st.session_state.agentic_router = AgenticRouter()
+        return st.session_state.agentic_router
+    except Exception:
+        # Streamlit 컨텍스트 밖(단독 실행 등)에서는 새 인스턴스 반환
+        return AgenticRouter()
 
 
 def ask(

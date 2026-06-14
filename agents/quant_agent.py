@@ -7,98 +7,53 @@ import yfinance as yf
 from openai import OpenAI
 import os
 from typing import Dict, Optional, Tuple
+import json
 
 
 class QuantAnalyst:
     """보수적인 퀀트 애널리스트 AI 에이전트"""
-    
+
     SYSTEM_PROMPT = """너는 보수적인 퀀트 성향의 주식 애널리스트다. 투자 권유가 아니라, 내가 제공한 숫자만으로 "가정 기반 적정가 밴드"와 "관심 매수 구간"을 계산한다.
 
 **핵심 규칙**:
-- 내가 숫자를 안 주더라도(예: FCF나 발행 주식 수, WACC 등) "필요한 입력값"을 물어보며 거부하지 말고, 당신의 지식을 총동원하여 업계 평균이나 최근 재무제표 팩트 기반으로 **합리적인 가정을 세워 무조건 끝까지 계산**한다.
+- 내가 숫자를 안 주더라도 "필요한 입력값"을 물어보며 거부하지 말고, 당신의 지식을 총동원하여 업계 평균이나 최근 재무제표 팩트 기반으로 **합리적인 가정을 세워 무조건 끝까지 계산**한다.
 - 가정하여 계산한 경우, 분석 내용 첫 줄에 어떤 숫자들을 가정하고 썼는지 명시한다.
-- 결과는 간결하게, 계산 근거가 보이게 쓴다.
 - 레버리지/대출 가정은 하지 말고, 분할매수 전제를 기본으로 둔다.
 - **보수적 관점 유지**: 성장률은 낮게, 할인율은 높게, 멀티플은 보수적으로 가정한다.
 
 ---
 
-## 밸류에이션 방법 (3가지)
+## 밸류에이션 방법 (4가지)
 
 ### 1️⃣ Simple P/E (기본 방식)
-**적용 대상**: 이익이 안정적인 성숙기 기업
+**적용 대상**: 이익이 안정적인 꾸준한 흑자 기업 (빅테크 소프트웨어 등)
+**계산**: 적정가 = EPS(FY1 또는 TTM) × 타겟 PER
 
-**계산 방식**:
-1) EPS는 (EPS_FY1이 있으면 FY1, 없으면 EPS_TTM)로 사용한다.
-2) 적정가 시나리오 3개를 계산한다.
-   - 보수 PER = 제공된 값
-   - 기준 PER = 제공된 값
-   - 낙관 PER = 제공된 값
-   적정가 = EPS × PER
-3) 추가로 "테마 평균 PER" 값이 주어지면, 테마 평균 PER로도 적정가 1개를 추가 계산한다.
+### 2️⃣ P/B (Price-to-Book) Band
+**적용 대상**: 메모리 반도체, 에너지 등 실적 변동성이 큰 시클리컬(경기민감) 기업
+**계산**: 적정가 = Book Value (BPS) × 타겟 P/B 배수
+*주의: 이익이 Peak일 때 오히려 낮은 타겟 P/B를, 적자일 때 높은 타겟 P/B를 부여하는 업계 특성을 반영할 것.
 
----
+🚨 **[멀티플 제한 가이드라인 - 절대 엄수]**:
+AI 임의로 높은 P/B를 부여하지 마라. 현재 주가나 현재 P/B 비율이 비정상적으로 높더라도, 역사적 밴드를 기준으로 아래의 제한을 반드시 지켜라.
+- 반도체 제조업/하드웨어 (예: MU, INTC 등): 타겟 P/B는 절대 **0.8 ~ 3.0 범위**를 벗어날 수 없다. (불황기 1.0 내외, 호황기 2.5 내외)
+- 철강/에너지/화학: 타겟 P/B는 절대 **0.5 ~ 1.5 범위**를 벗어날 수 없다.
 
-### 2️⃣ DCF (Discounted Cash Flow)
-**적용 대상**: 성장주, 적자 기업 (미래 현금흐름이 중요한 경우)
+### 3️⃣ DCF (Discounted Cash Flow)
+**적용 대상**: 고성장주, 적자 탈출 초기 기업
+**계산**: 잉여현금흐름(FCF) 기반 5년 영구 가치 할인 모형 적용.
 
-**필요 입력값**:
-- 현재 FCF (Free Cash Flow) 또는 Revenue
-- 성장률 (Year 1-5, %)
-- Terminal Growth Rate (영구 성장률, %)
-- WACC (할인율, %)
-- 발행 주식 수
-
-**계산 방식**:
-1) **Year 1-5 FCF 예측**: 
-   FCF_Year_N = FCF_Year_0 × (1 + Growth_Rate)^N
-2) **Terminal Value (TV)**:
-   TV = FCF_Year_5 × (1 + Terminal_Growth) / (WACC - Terminal_Growth)
-3) **현재 가치 (PV) 계산**:
-   PV = Σ(FCF_Year_N / (1 + WACC)^N) + TV / (1 + WACC)^5
-4) **주당 가치**:
-   Fair Value = PV / Shares Outstanding
-
-**보수적 시나리오 3개**:
-- 보수: 낮은 성장률, 높은 WACC
-- 기준: 제공된 값 그대로
-- 낙관: 높은 성장률, 낮은 WACC
+### 4️⃣ SOTP (Sum of the Parts)
+**적용 대상**: 여러 사업 부문을 가진 복합 지주사
+**계산**: 각 사업부 매출/EBITDA × 부문별 멀티플 합산 - 순부채
 
 ---
 
-### 3️⃣ SOTP (Sum of the Parts)
-**적용 대상**: 여러 사업 부문을 가진 복합 기업 (빅테크, 지주사)
+## 공통 출력 형식 (반드시 마크다운 표 유지)
 
-**필요 입력값**:
-- 각 사업 부문별:
-  - 부문명
-  - Revenue 또는 EBITDA
-  - 적용 Multiple (P/S 또는 EV/EBITDA)
-- Net Debt (순부채)
-- 발행 주식 수
-
-**계산 방식**:
-1) **각 부문 가치**:
-   Segment_Value = Revenue × P/S Multiple (또는 EBITDA × EV/EBITDA)
-2) **Enterprise Value (EV)**:
-   EV = Σ(Segment_Value)
-3) **Equity Value**:
-   Equity Value = EV - Net Debt
-4) **주당 가치**:
-   Fair Value = Equity Value / Shares Outstanding
-
-**보수적 시나리오 3개**:
-- 보수: 각 부문에 낮은 멀티플 적용
-- 기준: 제공된 멀티플 그대로
-- 낙관: 각 부문에 높은 멀티플 적용
-
----
-
-## 공통 출력 형식 (반드시 지켜라)
-
-**A) 밸류에이션 방법 및 전제** (2~3문장)
-- 어떤 방법을 사용했는지
-- 주요 가정 (성장률, 할인율, 멀티플 등)
+**A) 밸류에이션 방법 및 전제**
+- 사용한 방법론과 그 이유
+- 주요 가정 (EPS, BPS, 성장률, 멀티플 등)
 
 **B) 적정가 계산 표**
 | 시나리오 | 주요 가정 | 적정가 | 현재가 대비 |
@@ -108,65 +63,36 @@ class QuantAnalyst:
 | 낙관    | ...     | $XXX   | +/-XX%     |
 
 **C) 관심 매수 구간 3단** (달러로)
-- 탐색매수: 현재가 대비 -5%~-10% (비중: 소)
-- 메인매수: 현재가 대비 -15%~-25% (비중: 중)
-- 패닉매수: 현재가 대비 -30%~-45% (비중: 대)
-※ 적정가(보수/기준)와 너무 동떨어지면 이유를 말하고 구간을 조정해라.
+🚨 **중요 규칙**: 매수 구간은 '현재가' 기준이 아니라, **위에서 계산된 [기준 시나리오 적정가]를 바탕으로 안전마진을 차감**하여 계산해라.
+- 탐색매수: 적정가(기준) 대비 -10%~-15% (비중: 소)
+- 메인매수: 적정가(기준) 대비 -20%~-30% (비중: 중)
+- 패닉매수: 적정가(기준) 대비 -35% 이상 하락 시 (비중: 대)
 
 **D) 핵심 리스크 5개** (한 줄 bullet)
 
-**E) 체크 포인트 3개** (다음 실적에서 뭘 보면 되는지)
-
-반드시 마크다운 표 형식을 사용하고, 각 섹션을 명확히 구분하여 출력하라."""
+**E) 체크 포인트 3개** (다음 실적 발표 시 모니터링할 지표)
+"""
 
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Args:
-            api_key: OpenAI API 키 (None이면 환경변수에서 가져옴)
-        """
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
-        
         self.client = OpenAI(api_key=self.api_key)
-    
+
     def fetch_stock_data(self, ticker: str) -> Dict:
-        """
-        yfinance를 사용하여 주식 데이터 수집
-        
-        Args:
-            ticker: 주식 티커 (예: TSLA, AAPL)
-        
-        Returns:
-            dict: {
-                'ticker': str,
-                'price': float,
-                'eps_ttm': float,
-                'eps_fy1': float,
-                'pe_ratio': float,
-                'company_name': str,
-                'error': str (오류 발생 시)
-            }
-        """
+        """yfinance를 사용하여 주식 데이터 수집 (Book Value 추가)"""
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
-            
-            # 현재가
+
             price = info.get('currentPrice') or info.get('regularMarketPrice')
-            
-            # EPS (TTM)
             eps_ttm = info.get('trailingEps')
-            
-            # EPS (Forward/FY1)
             eps_fy1 = info.get('forwardEps')
-            
-            # P/E Ratio
             pe_ratio = info.get('trailingPE') or info.get('forwardPE')
-            
-            # 회사명
+            book_value = info.get('bookValue')      # 주당순자산 추가
+            pb_ratio = info.get('priceToBook')      # P/B 비율 추가
             company_name = info.get('longName') or info.get('shortName') or ticker
-            
+
             return {
                 'ticker': ticker.upper(),
                 'company_name': company_name,
@@ -174,142 +100,45 @@ class QuantAnalyst:
                 'eps_ttm': round(eps_ttm, 2) if eps_ttm else None,
                 'eps_fy1': round(eps_fy1, 2) if eps_fy1 else None,
                 'pe_ratio': round(pe_ratio, 2) if pe_ratio else None,
+                'book_value': round(book_value, 2) if book_value else None,
+                'pb_ratio': round(pb_ratio, 2) if pb_ratio else None,
                 'error': None
             }
-        
         except Exception as e:
-            return {
-                'ticker': ticker.upper(),
-                'error': f"데이터 수집 실패: {str(e)}"
-            }
-    
-    def generate_analysis(
-        self,
-        ticker: str,
-        price: float,
-        valuation_method: str = "pe",  # "pe", "dcf", "sotp"
-        # P/E 파라미터
-        eps_ttm: Optional[float] = None,
-        eps_fy1: Optional[float] = None,
-        theme: Optional[str] = None,
-        theme_pe: Optional[float] = None,
-        pe_low: float = 15,
-        pe_base: float = 20,
-        pe_high: float = 25,
-        # DCF 파라미터
-        fcf_current: Optional[float] = None,
-        growth_rate: Optional[float] = None,  # %
-        terminal_growth: Optional[float] = None,  # %
-        wacc: Optional[float] = None,  # %
-        shares_outstanding: Optional[float] = None,  # millions
-        # SOTP 파라미터
-        segments: Optional[list] = None,  # [{"name": str, "revenue": float, "multiple": float}, ...]
-        net_debt: Optional[float] = None,
-        temperature: float = 0.3
-    ) -> str:
-        """
-        퀀트 애널리스트 분석 생성
-        
-        Args:
-            ticker: 종목 티커
-            price: 현재가 (달러)
-            valuation_method: 밸류에이션 방법 ("pe", "dcf", "sotp")
-            
-            # P/E 방식
-            eps_ttm: EPS (TTM)
-            eps_fy1: EPS (FY1 예상)
-            theme: 테마/비교군
-            theme_pe: 테마 평균 PER
-            pe_low: 보수 PER (기본값: 15)
-            pe_base: 기준 PER (기본값: 20)
-            pe_high: 낙관 PER (기본값: 25)
-            
-            # DCF 방식
-            fcf_current: 현재 FCF (Free Cash Flow, 백만 달러)
-            growth_rate: 성장률 Year 1-5 (%)
-            terminal_growth: 영구 성장률 (%)
-            wacc: 할인율 (%)
-            shares_outstanding: 발행 주식 수 (백만 주)
-            
-            # SOTP 방식
-            segments: 사업 부문 리스트 [{"name": str, "revenue": float, "multiple": float}, ...]
-            net_debt: 순부채 (백만 달러)
-            
-            temperature: AI 창의성 (기본값: 0.3, 보수적)
-        
-        Returns:
-            str: 분석 결과 (마크다운 형식)
-        """
-        # 밸류에이션 방법별 입력 데이터 구성
+            return {'ticker': ticker.upper(), 'error': f"데이터 수집 실패: {str(e)}"}
+
+    def generate_analysis(self, ticker: str, price: float, valuation_method: str = "pe", **kwargs) -> str:
+        """선택된 밸류에이션 방법에 따라 프롬프트를 구성하고 AI 분석 요청"""
+
+        base_info = f"- 종목/티커: {ticker}\n- 현재가: ${price}\n"
+
         if valuation_method.lower() == "pe":
-            user_message = f"""[밸류에이션 방법]
-Simple P/E (주가수익비율)
+            eps_ttm = kwargs.get('eps_ttm')
+            eps_fy1 = kwargs.get('eps_fy1')
+            user_message = f"[밸류에이션 방법] Simple P/E\n[입력]\n{base_info}"
+            user_message += f"- EPS(TTM): ${eps_ttm if eps_ttm else '(제공되지 않음. 추정 요망)'}\n"
+            user_message += f"- EPS(FY1 예상): ${eps_fy1 if eps_fy1 else '(제공되지 않음. 추정 요망)'}\n"
+            user_message += "\n제공된 지표 또는 역사적 평균을 가정하여 P/E 기반 적정가를 도출해줘."
 
-[입력]
-- 종목/티커: {ticker}
-- 현재가: ${price}
-- EPS(TTM): {f'${eps_ttm}' if eps_ttm else '(제공되지 않음)'}
-- EPS(FY1 예상): {f'${eps_fy1}' if eps_fy1 else '(제공되지 않음)'}
-- 테마/비교군: {theme if theme else '(제공되지 않음)'}
-- 테마 평균 PER: {f'{theme_pe}배' if theme_pe else '(제공되지 않음)'}
-
-[PER 시나리오]
-- 보수 PER: {pe_low}배
-- 기준 PER: {pe_base}배
-- 낙관 PER: {pe_high}배
-
-위 정보를 바탕으로 적정가 밴드와 관심 매수 구간을 계산해줘."""
+        elif valuation_method.lower() == "pb":
+            book_value = kwargs.get('book_value')
+            pb_ratio = kwargs.get('pb_ratio')
+            user_message = f"[밸류에이션 방법] P/B (시클리컬 전용)\n[입력]\n{base_info}"
+            user_message += f"- Book Value (주당순자산): ${book_value if book_value else '(제공되지 않음. 추정 요망)'}\n"
+            user_message += f"- 현재 P/B Ratio: {pb_ratio if pb_ratio else '(제공되지 않음)'}\n"
+            user_message += "\n해당 기업의 역사적 P/B 밴드를 보수적으로 가정하여, 호황기/불황기 사이클을 고려한 적정가를 도출해줘."
 
         elif valuation_method.lower() == "dcf":
-            user_message = f"""[밸류에이션 방법]
-DCF (Discounted Cash Flow)
-
-[입력]
-- 종목/티커: {ticker}
-- 현재가: ${price}
-- 현재 FCF: ${fcf_current}M {' (제공되지 않음)' if fcf_current is None else ''}
-- 성장률 (Year 1-5): {growth_rate}% {' (제공되지 않음)' if growth_rate is None else ''}
-- Terminal Growth Rate: {terminal_growth}% {' (제공되지 않음)' if terminal_growth is None else ''}
-- WACC (할인율): {wacc}% {' (제공되지 않음)' if wacc is None else ''}
-- 발행 주식 수: {shares_outstanding}M {' (제공되지 않음)' if shares_outstanding is None else ''}
-
-[보수적 시나리오 가이드]
-- 보수: 성장률 -{growth_rate * 0.2 if growth_rate else 5}%, WACC +1%
-- 기준: 제공된 값 그대로
-- 낙관: 성장률 +{growth_rate * 0.2 if growth_rate else 5}%, WACC -1%
-
-*주의: FCF나 주식수 등 누락된 값이 있더라도 사용자에게 물어보지 마세요. 당신이 가진 기업의 최근 재무 데이터를 바탕으로 합리적인 근사치를 가정하여 무조건 적정가 밴드를 도출하세요.*
-
-위 정보를 바탕으로 DCF 모델로 적정가 밴드와 관심 매수 구간을 계산해줘."""
+            user_message = f"[밸류에이션 방법] DCF\n[입력]\n{base_info}"
+            user_message += "재무 지표가 제공되지 않았습니다. 해당 기업의 업계 평균 잉여현금흐름(FCF), WACC(약 9~11%), 영구성장률(약 2~3%)을 보수적으로 임의 가정하여 DCF 적정가를 도출해줘."
 
         elif valuation_method.lower() == "sotp":
-            segments_str = ""
-            if segments:
-                for i, seg in enumerate(segments):
-                    segments_str += f"\n  {i+1}. {seg.get('name', 'N/A')}: Revenue ${seg.get('revenue', 0)}M × {seg.get('multiple', 0)}배"
-            else:
-                segments_str = "\n  (제공되지 않음)"
-            
-            user_message = f"""[밸류에이션 방법]
-SOTP (Sum of the Parts)
-
-[입력]
-- 종목/티커: {ticker}
-- 현재가: ${price}
-- 사업 부문:{segments_str}
-- Net Debt (순부채): ${net_debt}M {' (제공되지 않음)' if net_debt is None else ''}
-- 발행 주식 수: {shares_outstanding}M {' (제공되지 않음)' if shares_outstanding is None else ''}
-
-[보수적 시나리오 가이드]
-- 보수: 각 부문 멀티플 -20%
-- 기준: 제공된 멀티플 그대로
-- 낙관: 각 부문 멀티플 +20%
-
-위 정보를 바탕으로 SOTP 모델로 적정가 밴드와 관심 매수 구간을 계산해줘."""
+            user_message = f"[밸류에이션 방법] SOTP\n[입력]\n{base_info}"
+            user_message += "세부 사업 부문 매출이 제공되지 않았습니다. 기업의 주요 비즈니스 모델을 분석해 핵심 부문별 멀티플을 다르게 적용하는 SOTP 방식으로 적정가를 도출해줘."
 
         else:
-            return f"❌ 지원하지 않는 밸류에이션 방법: {valuation_method}. 'pe', 'dcf', 'sotp' 중 하나를 선택하세요."
-        
+            return f"❌ 지원하지 않는 밸류에이션 방법: {valuation_method}. 'pe', 'pb', 'dcf', 'sotp' 중 하나를 선택하세요."
+
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -317,115 +146,28 @@ SOTP (Sum of the Parts)
                     {"role": "system", "content": self.SYSTEM_PROMPT},
                     {"role": "user", "content": user_message}
                 ],
-                temperature=temperature
+                temperature=kwargs.get('temperature', 0.2)
             )
-            
             return response.choices[0].message.content
-        
         except Exception as e:
             return f"❌ 분석 생성 중 오류 발생: {str(e)}"
-    
-    def analyze_stock(
-        self,
-        ticker: str,
-        manual_price: Optional[float] = None,
-        manual_eps_ttm: Optional[float] = None,
-        manual_eps_fy1: Optional[float] = None,
-        theme: Optional[str] = None,
-        theme_pe: Optional[float] = None,
-        pe_low: float = 15,
-        pe_base: float = 20,
-        pe_high: float = 25
-    ) -> Tuple[Dict, str]:
-        """
-        주식 분석 전체 프로세스 (데이터 수집 + 분석 생성)
-        
-        Args:
-            ticker: 주식 티커
-            manual_price: 수동 입력 현재가 (None이면 자동 수집)
-            manual_eps_ttm: 수동 입력 EPS(TTM)
-            manual_eps_fy1: 수동 입력 EPS(FY1)
-            theme: 테마/비교군
-            theme_pe: 테마 평균 PER
-            pe_low: 보수 PER
-            pe_base: 기준 PER
-            pe_high: 낙관 PER
-        
-        Returns:
-            tuple: (stock_data dict, analysis str)
-        """
-        # 1. 데이터 수집 (수동 입력이 없는 경우)
-        if manual_price is None:
-            stock_data = self.fetch_stock_data(ticker)
-            
-            if stock_data.get('error'):
-                return stock_data, f"⚠️ {stock_data['error']}\n\n수동으로 데이터를 입력해주세요."
-            
-            # 수동 입력값으로 덮어쓰기
-            price = manual_price or stock_data.get('price')
-            eps_ttm = manual_eps_ttm or stock_data.get('eps_ttm')
-            eps_fy1 = manual_eps_fy1 or stock_data.get('eps_fy1')
-        else:
-            # 모두 수동 입력
-            stock_data = {
-                'ticker': ticker.upper(),
-                'company_name': ticker.upper(),
-                'price': manual_price,
-                'eps_ttm': manual_eps_ttm,
-                'eps_fy1': manual_eps_fy1,
-                'error': None
-            }
-            price = manual_price
-            eps_ttm = manual_eps_ttm
-            eps_fy1 = manual_eps_fy1
-        
-        # 2. 필수 데이터 검증
-        if price is None:
-            return stock_data, "❌ 현재가 정보가 필요합니다. 수동으로 입력해주세요."
-        
-        if eps_ttm is None and eps_fy1 is None:
-            return stock_data, "❌ EPS(TTM) 또는 EPS(FY1) 정보가 필요합니다. 수동으로 입력해주세요."
-        
-        # 3. 분석 생성
-        analysis = self.generate_analysis(
-            ticker=ticker,
-            price=price,
-            eps_ttm=eps_ttm,
-            eps_fy1=eps_fy1,
-            theme=theme,
-            theme_pe=theme_pe,
-            pe_low=pe_low,
-            pe_base=pe_base,
-            pe_high=pe_high
-        )
-        
-        return stock_data, analysis
 
-    def process(self, query: str, **kwargs) -> Dict:
-        """
-        자연어 질문을 받아 알아서 종목을 추출하고 알맞은 밸류에이션 방법을 선택하여 분석합니다.
-        
-        Args:
-            query: 사용자 질문 (예: "엔비디아 적정가 얼마야?", "테슬라 DCF 밸류에이션 해줘")
-        
-        Returns:
-            dict: {'analysis': 분석 리포트, 'stock_data': 데이터}
-        """
-        import json
-        
-        # 1. 쿼리에서 티커 및 의도 추출
+    def process(self, query: str) -> Dict:
+        """자연어 질문 기반 종목 추출 및 밸류에이션 매칭 파이프라인"""
+
         extract_prompt = """사용자의 질문에서 분석할 미국 주식 티커(영어 대문자)와 적합한 밸류에이션 방법을 추출하세요.
 
 [밸류에이션 방법 선택 가이드]
-- pe: 이익이 안정적이고 꾸준한 흑자 기업 (예: 애플, 마이크로소프트, 은행주 등). 가장 널리 쓰임.
-- dcf: 고성장주, 잉여현금흐름이 중요하거나 이제 막 흑자 전환한 기업, 미래 가치가 중요한 기업 (예: 테슬라, 엔비디아 등)
-- sotp: 복합 기업, 사업부가 다양하게 쪼개진 지주사 성격 기업 (예: 알파벳, 디즈니 등)
+- pb: 메모리 반도체, 철강, 정유 등 실적 변동성이 매우 큰 경기민감주/시클리컬 기업 (예: MU, XOM, TXN 등)
+- pe: 이익이 안정적이고 꾸준한 일반적인 흑자 기업 (예: AAPL, MSFT, V 등)
+- dcf: 고성장주, 현금흐름이 중요한 빅테크나 적자 탈출 기업 (예: TSLA, NVDA 등)
+- sotp: 복합 사업을 영위하는 지주사 성격의 기업 (예: GOOGL, DIS 등)
 
 반드시 아래 JSON 형식만 반환하세요:
 {
-    "ticker": "TSLA",
-    "method": "dcf",
-    "reason": "해당 방법을 선택한 짧은 이유"
+    "ticker": "MU",
+    "method": "pb",
+    "reason": "마이크론은 대표적인 메모리 반도체 시클리컬 주식이므로 P/B가 적합함"
 }"""
 
         try:
@@ -438,51 +180,60 @@ SOTP (Sum of the Parts)
                 temperature=0.0
             )
             raw = response.choices[0].message.content.strip()
-            
-            # 마크다운 백틱 제거
             if raw.startswith("```json"):
                 raw = raw[7:-3].strip()
             elif raw.startswith("```"):
                 raw = raw[3:-3].strip()
-                
+
             parsed = json.loads(raw)
             ticker = parsed.get("ticker")
             method = parsed.get("method", "pe")
             reason = parsed.get("reason", "")
-            
+
             if not ticker:
                 return {"error": "질문에서 분석할 종목(티커)을 찾을 수 없습니다."}
-                
+
         except Exception as e:
             return {"error": f"의도 추출 실패: {str(e)}"}
 
-        # 2. 데이터 수집
+        # 데이터 수집
         stock_data = self.fetch_stock_data(ticker)
         if stock_data.get('error'):
-             return {"error": f"⚠️ {stock_data['error']}\n수동 데이터 수집이 필요합니다."}
-             
-        # 3. 분석 방법별 맞춤 파라미터 세팅
+            return {"error": f"⚠️ {stock_data['error']}\n수동 데이터 수집이 필요합니다."}
+
         price = stock_data.get('price')
         if not price:
             return {"error": f"❌ {ticker}의 현재가 정보를 불러올 수 없습니다."}
 
-        # 기본 분석 호출 (동적으로 방식 결정 지원하도록 generate_analysis 개편 필요 없이 있는 거 사용)
-        # SOTP나 DCF에 필요한 파라미터가 비어있으면 AI 시스템 프롬프트가 (제공 안됨) 처리 후 알아서 유추하게끔 처리
+        # ── P/B 과열 감지: 현재 P/B가 역사적 상한(3.0)의 2배 초과 시 DCF로 자동 전환 ──
+        pb_warning = ""
+        current_pb = stock_data.get('pb_ratio')
+        PB_HISTORICAL_UPPER = 3.0   # 반도체 제조업 역사적 P/B 상한
+        PB_OVERHEATING_THRESHOLD = PB_HISTORICAL_UPPER * 2  # = 6.0
+
+        if method == "pb" and current_pb and current_pb > PB_OVERHEATING_THRESHOLD:
+            pb_warning = (
+                f"\n\n> 🚨 **[P/B 과열 감지 — 방법론 자동 전환]**\n"
+                f"> 현재 P/B가 **{current_pb:.1f}배**로, 역사적 상한선(3.0배)의 **{current_pb / PB_HISTORICAL_UPPER:.1f}배** 수준입니다.\n"
+                f"> P/B 밴드 분석은 현재 가격과 역사적 적정가의 괴리가 너무 커 신뢰도가 낮습니다.\n"
+                f"> ➜ **DCF(현금흐름 할인) 방식으로 자동 전환하여 분석합니다.**\n"
+            )
+            method = "dcf"
+            reason = f"P/B 과열(현재 {current_pb:.1f}배) 감지 → DCF로 자동 전환"
+
+        # 분석 실행 — 방법론에 맞는 데이터만 kwargs로 전달
         analysis = self.generate_analysis(
             ticker=ticker,
             price=price,
             valuation_method=method,
             eps_ttm=stock_data.get('eps_ttm'),
             eps_fy1=stock_data.get('eps_fy1'),
-            pe_low=15, pe_base=20, pe_high=25,
-            # DCF용 기본 파라미터 (정보 부족 시 GPT가 평균 가정값 사용)
-            growth_rate=20.0,
-            terminal_growth=3.0,
-            wacc=10.0,
-            temperature=0.3
+            book_value=stock_data.get('book_value'),
+            pb_ratio=stock_data.get('pb_ratio'),
+            temperature=0.2
         )
 
-        header = f"**💡 분석 방식:** `{method.upper()}` ({reason})\n\n---\n"
+        header = f"**💡 분석 방식:** `{method.upper()}` ({reason}){pb_warning}\n\n---\n"
         analysis = header + analysis
 
         return {
