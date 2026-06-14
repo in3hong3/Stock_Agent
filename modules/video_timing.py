@@ -20,7 +20,7 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ALERTS_FILE = os.path.join(_BASE_DIR, "data", "video_alerts.json")
 
 
-def get_recent_videos(days: int = 90, max_videos: int = 60) -> List[Dict]:
+def get_recent_videos(days: int = 90, max_videos: int = 50) -> List[Dict]:
     """최근 N일 영상 메타+요약 텍스트 가져오기 (Pinecone)"""
     from utils.pinecone_store import PineconeStore
     from config.settings import PINECONE_NAMESPACE_SUMMARY
@@ -52,7 +52,7 @@ def get_recent_videos(days: int = 90, max_videos: int = 60) -> List[Dict]:
             "channel": meta.get("채널명", ""),
             "date": upload,
             "ticker": meta.get("ticker", ""),
-            "text": str(meta.get("text", ""))[:400],
+            "text": str(meta.get("text", ""))[:800],
             "link": meta.get("영상링크", ""),
         })
 
@@ -61,7 +61,7 @@ def get_recent_videos(days: int = 90, max_videos: int = 60) -> List[Dict]:
 
 
 def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
-                          model: str = "gpt-4o-mini") -> List[Dict]:
+                          model: str = "gpt-4o") -> List[Dict]:
     """LLM으로 시점 알림 추출"""
     if not videos:
         return []
@@ -100,7 +100,10 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
     )
 
     system_prompt = (
-        "너는 주식 유튜브 영상 분석가야. 보유자에게 '지금 알아야 할' 정보만 골라낸다. "
+        "너는 주식 유튜브 영상 아카이브 분석가야. 보유자에게 '지금 알아야 할' 정보만 골라낸다. "
+        "특히 **과거 영상에서 미래 시점을 언급한 것**을 찾는 게 핵심 임무다 "
+        "(예: 3개월 전 영상이 '6월에 매수 노려라'라고 했고 지금이 6월이면 그게 가장 가치 있는 알림). "
+        "최신 영상에만 쏠리지 말고 90일치 영상 전체를 균등하게 훑어라. "
         "유튜버 의견은 참고용일 뿐 보장이 아니다. 직접적 인용 위주로 추출하고 과장하지 마라."
     )
 
@@ -144,6 +147,8 @@ def extract_timing_alerts(videos: List[Dict], holdings: List[Dict] = None,
 - 이벤트 임박: 이벤트일 + 3일
 
 기타 규칙:
+- ⭐ **영상 골고루 분석**: 최근 영상에 쏠리지 말 것. 30일 전, 60일 전 영상에서도 시점 도래 적극 찾아라.
+  특히 '시점 도래' 카테고리는 과거 영상에서 나와야 의미 있다 (최근 영상은 즉시 경고가 적합).
 - 내 보유 종목 직접 관련을 우선 (있을 시 상단)
 - 시장 전반 경고/기회도 포함 (조정 임박, 변동성 확대, 매수 기회 등)
 - 모호한 의견("그냥 좋다", "전망 밝다")은 제외 — 시점·행동 명확한 것만
