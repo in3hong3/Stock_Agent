@@ -12,11 +12,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 load_dotenv()
 
-from modules.video_timing import refresh_alerts
+from modules.video_timing import refresh_alerts, needs_refresh
 from modules.issue_tracker import get_portfolio_holdings
 
 
 def main():
+    # 비용 절감: 48시간 이내 갱신했으면 스킵 (cron은 매일 돌지만 이틀에 한 번만 실행)
+    if not needs_refresh(stale_hours=48):
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 48시간 이내 갱신됨 — 스킵")
+        return
+
     # 모든 사용자 종목 합산 (공용 알림이라 합쳐서 한 번에 분석)
     base = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "users"
