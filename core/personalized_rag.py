@@ -40,34 +40,73 @@ class PersonalizedRAG:
             logger.error(f"포트폴리오 로드 실패: {str(e)}")
             self.portfolio_df = pd.DataFrame()
     
-    def _get_portfolio_context(self) -> str:
-        """
-        포트폴리오 정보를 컨텍스트로 변환
-        
-        Returns:
-            str: 포트폴리오 요약 텍스트
+    def _get_portfolio_context(self, related_holdings: Optional[List[Dict]] = None) -> str:
+        """포트폴리오 정보를 LLM이 활용 가능한 구조화 컨텍스트로 변환.
+
+        - 전체 비중%, 평단/현재가, 손익률을 종목별로 명시
+        - 질문과 관련된 종목(`related_holdings`)은 우선 상세 노출, 나머지는 요약
+        - 답변 지시문을 함께 끼워 LLM이 '내 관점에서' 답하도록 유도
         """
         if self.portfolio_df is None or self.portfolio_df.empty:
             return ""
-        
-        # 보유 종목 요약
-        context = "\n\n[사용자 보유 포트폴리오]\n"
-        context += f"총 {len(self.portfolio_df)}개 종목 보유 중\n\n"
-        
-        # 주요 종목 (평가금액 상위 5개)
-        top_holdings = self.portfolio_df.nlargest(5, 'eval_amount')
-        context += "주요 보유 종목:\n"
-        for _, stock in top_holdings.iterrows():
-            context += f"- {stock['name']} ({stock['ticker']}): "
-            context += f"{stock['quantity']:,}주, "
-            context += f"수익률 {stock['profit_rate']:.1f}%\n"
-        
-        # 수익/손실 종목 수
-        profitable = len(self.portfolio_df[self.portfolio_df['profit_loss'] > 0])
-        losing = len(self.portfolio_df[self.portfolio_df['profit_loss'] < 0])
-        context += f"\n수익 종목: {profitable}개 | 손실 종목: {losing}개\n"
-        
-        return context
+
+        df = self.portfolio_df
+        total_eval = float(df['eval_amount'].sum()) or 1.0
+        n_total = len(df)
+        n_win = int((df['profit_loss'] > 0).sum())
+        n_lose = int((df['profit_loss'] < 0).sum())
+
+        related_tickers = {h['ticker'] for h in (related_holdings or [])}
+
+        def _line(stock) -> str:
+            weight = float(stock['eval_amount']) / total_eval * 100
+            return (
+                f"- {stock['name']} ({stock['ticker']}): "
+                f"비중 {weight:.1f}% · 평단 {stock['avg_price']:,.2f} → 현재가 {stock['current_price']:,.2f} "
+                f"· 수익률 {stock['profit_rate']:+.1f}% · {int(stock['quantity']):,}주"
+            )
+
+        lines = []
+        lines.append("[사용자 보유 포트폴리오 — 답변할 때 반드시 이 정보를 활용하세요]")
+        lines.append(
+            f"총 {n_total}개 종목 보유 (수익 {n_win} · 손실 {n_lose}) · "
+            f"총 평가액 {total_eval:,.0f}"
+        )
+
+        if related_tickers:
+            lines.append("\n[질문과 직접 관련된 보유 종목]")
+            for _, s in df[df['ticker'].isin(related_tickers)].iterrows():
+                lines.append(_line(s))
+
+            others = df[~df['ticker'].isin(related_tickers)].nlargest(5, 'eval_amount')
+            if not others.empty:
+                lines.append("\n[그 외 주요 보유 종목 (비중 상위 5개)]")
+                for _, s in others.iterrows():
+                    lines.append(_line(s))
+        else:
+            lines.append("\n[비중 상위 보유 종목]")
+            for _, s in df.nlargest(8, 'eval_amount').iterrows():
+                lines.append(_line(s))
+
+        # 가장 큰 손실/수익 종목은 항상 알려준다 (사용자가 신경 쓸 가능성 큼)
+        try:
+            worst = df.loc[df['profit_rate'].idxmin()]
+            best = df.loc[df['profit_rate'].idxmax()]
+            lines.append(
+                f"\n[극단 수익률] 최고: {best['name']} ({best['ticker']}, {best['profit_rate']:+.1f}%) "
+                f"/ 최저: {worst['name']} ({worst['ticker']}, {worst['profit_rate']:+.1f}%)"
+            )
+        except (ValueError, KeyError):
+            pass
+
+        lines.append(
+            "\n[답변 지침]"
+            "\n1. 사용자가 직접 보유한 종목이 질문과 관련 있으면 그 종목의 '현재 비중·평단 대비 수익률'을 근거로 우선 분석할 것."
+            "\n2. 새 종목 추천보다 '보유 중인 어떤 종목과의 관계'를 먼저 짚을 것."
+            "\n3. 손실 중인 보유 종목이 관련되면 '추가매수 vs 손절 vs 보유'에 대한 판단을 명확히 제시할 것."
+            "\n4. 보유하지 않은 종목을 단순 추천하지 말 것 — 사용자는 이미 포지션이 있음."
+        )
+        return "\n".join(lines)
     
     def _extract_tickers_from_query(self, query: str) -> List[str]:
         """
@@ -95,53 +134,84 @@ class PersonalizedRAG:
         
         return mentioned_tickers
     
+    # 일반 산업/테마 키워드 → 보유 종목 매칭은 사용자가 실제 보유한 종목만 추출하기 위한 보조 룰.
+    # 종목 자체가 적힌 게 아니라 '주제'만 적힌 질문에서, 어떤 보유 종목이 관련 있는지 좁히는 용도.
+    _THEME_KEYWORDS = {
+        "ai": ["nvda", "googl", "msft", "meta", "amzn", "orcl", "ionq", "smci", "avgo", "palantir", "pltr"],
+        "반도체": ["nvda", "mu", "tsm", "skyt", "amd", "intc", "avgo", "asml", "삼성전자", "sk하이닉스", "하이닉스", "005930", "000660"],
+        "빅테크": ["googl", "amzn", "meta", "msft", "aapl", "orcl"],
+        "클라우드": ["googl", "amzn", "msft", "orcl", "snow", "ddog"],
+        "양자컴퓨팅": ["ionq", "rgti", "qbts"],
+        "태양광": ["fslr", "enph", "sedg"],
+        "전기차": ["tsla", "rivn", "byd", "nio"],
+        "원전": ["smr", "ccj", "uec", "leu"],
+        "방산": ["lmt", "rtx", "noc", "ge", "한화에어로", "한국항공우주"],
+        "은행": ["kre", "xlf", "jpm", "kb금융", "신한지주", "하나금융"],
+        "헬스케어": ["xlv", "lly", "unh", "삼성바이오로직스"],
+        "일본": [".t"],
+        "한국": [".ks", ".kq"],
+    }
+
     def _get_related_holdings(self, query: str) -> List[Dict]:
-        """
-        질문과 관련된 보유 종목 찾기
-        
-        Args:
-            query: 사용자 질문
-            
-        Returns:
-            List[Dict]: 관련 종목 정보
+        """질문과 관련된 보유 종목 추출.
+
+        결과는 반드시 사용자가 '실제로 보유 중'인 종목만 포함. 다음 순서로 매칭:
+        1. 종목명/티커가 질문에 직접 등장 (가장 강한 신호)
+        2. 일반 테마 키워드(AI/반도체 등) → 그 테마에 해당하는 종목 중 보유 중인 것만
+        3. '내 종목', '포트폴리오', '전부' 같은 전체 지시어가 있으면 모든 보유 종목 반환
         """
         if self.portfolio_df is None or self.portfolio_df.empty:
             return []
-        
-        related_stocks = []
+
         query_lower = query.lower()
-        
-        # 키워드 기반 매칭
-        keyword_map = {
-            'ai': ['NVDA', 'GOOGL', 'META', 'AMZN', 'ORCL', 'IONQ'],
-            '반도체': ['NVDA', 'MU', 'TSM', 'SKYT'],
-            '빅테크': ['GOOGL', 'AMZN', 'META', 'ORCL'],
-            '클라우드': ['GOOGL', 'AMZN', 'ORCL'],
-            '양자컴퓨팅': ['IONQ'],
-            '태양광': ['FSLR'],
-            '일본': ['1497.T', '9984.T'],
-            '은행': ['KRE'],
-            '헬스케어': ['XLV'],
-        }
-        
-        # 키워드 매칭
-        for keyword, tickers in keyword_map.items():
-            if keyword in query_lower:
-                for ticker in tickers:
-                    stock_data = self.portfolio_df[self.portfolio_df['ticker'] == ticker]
-                    if not stock_data.empty:
-                        related_stocks.append(stock_data.iloc[0].to_dict())
-        
-        # 직접 언급된 종목 추가
-        mentioned_tickers = self._extract_tickers_from_query(query)
-        for ticker in mentioned_tickers:
-            stock_data = self.portfolio_df[self.portfolio_df['ticker'] == ticker]
-            if not stock_data.empty:
-                stock_dict = stock_data.iloc[0].to_dict()
-                if stock_dict not in related_stocks:
-                    related_stocks.append(stock_dict)
-        
-        return related_stocks
+        related: List[Dict] = []
+        seen: set = set()
+
+        def _add(ticker: str):
+            if ticker in seen:
+                return
+            row = self.portfolio_df[self.portfolio_df['ticker'] == ticker]
+            if not row.empty:
+                related.append(row.iloc[0].to_dict())
+                seen.add(ticker)
+
+        # 1) 직접 언급
+        for ticker in self._extract_tickers_from_query(query):
+            _add(ticker)
+
+        # 2) 전체 지시어 → 보유 종목 전체
+        all_indicators = ["내 종목", "내 포트", "포트폴리오", "보유 중", "보유종목", "보유 종목", "전부", "전체", "모든 종목"]
+        if any(k in query_lower for k in all_indicators):
+            for _, stock in self.portfolio_df.iterrows():
+                _add(stock['ticker'])
+            return related
+
+        # 3) 테마 키워드 매칭 — 보유 중인 종목 중에서만
+        portfolio_tickers_lower = {t.lower(): t for t in self.portfolio_df['ticker'].astype(str)}
+        portfolio_names_lower = {str(n).lower(): t for n, t in zip(self.portfolio_df['name'], self.portfolio_df['ticker'])}
+
+        for theme, candidates in self._THEME_KEYWORDS.items():
+            if theme not in query_lower:
+                continue
+            for cand in candidates:
+                cand_low = cand.lower()
+                # 접미사 매칭 (.T, .KS 등)
+                if cand_low.startswith("."):
+                    for t_low, t_orig in portfolio_tickers_lower.items():
+                        if t_low.endswith(cand_low):
+                            _add(t_orig)
+                    continue
+                # 티커 정확 매칭
+                if cand_low in portfolio_tickers_lower:
+                    _add(portfolio_tickers_lower[cand_low])
+                    continue
+                # 종목명 부분 매칭
+                for name_low, t_orig in portfolio_names_lower.items():
+                    if cand_low in name_low:
+                        _add(t_orig)
+                        break
+
+        return related
     
     def _augment_query(self, query: str) -> str:
         """
@@ -182,28 +252,23 @@ class PersonalizedRAG:
             Dict: 답변, 소스, 후속 질문, 관련 보유 종목
         """
         try:
-            # 1. 질문 증강 (보유 종목 티커 추가)
-            augmented_query = self._augment_query(query) if use_portfolio_context else query
-            
-            # 2. 포트폴리오 컨텍스트 준비
-            portfolio_context = ""
-            related_holdings = []
+            # 포트폴리오는 사용자가 자주 수정하므로 매번 최신 상태로 다시 읽는다
             if use_portfolio_context:
-                portfolio_context = self._get_portfolio_context()
-                related_holdings = self._get_related_holdings(query)
+                self._load_portfolio()
 
-            # 3. 기본 RAG 검색 및 답변 생성
+            related_holdings = self._get_related_holdings(query) if use_portfolio_context else []
+            portfolio_context = self._get_portfolio_context(related_holdings) if use_portfolio_context else ""
+            augmented_query = self._augment_query(query) if use_portfolio_context else query
+
             result = self.rag_engine.chat(
                 query=augmented_query,
                 top_k=top_k,
                 temperature=temperature,
                 conversation_history=conversation_history,
-                extra_context=portfolio_context  # 신규 필드 전달
+                extra_context=portfolio_context,
             )
-            
-            # 4. 관련 보유 종목 정보 메타데이터로 추가
+
             result['related_holdings'] = related_holdings
-            
             return result
             
         except Exception as e:

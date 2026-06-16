@@ -43,8 +43,8 @@ def get_realtime_market_summary():
     try:
         import yfinance as yf
         import requests
+        import math
         
-        # 1. 주요 지수 (yfinance)
         mapping = {
             "^DJI": "다우존스",
             "^GSPC": "S&P 500",
@@ -56,45 +56,39 @@ def get_realtime_market_summary():
         
         results = []
         
-        # 2. CNN 공포/탐욕 지수 가져오기
-        fng_data = {"종목": "공포/탐욕", "현재가": 0.0, "등락": "Neutral"}
+        # CNN 공포/탐욕 지수
+        fng_data = {"종목": "공포/탐욕", "현재가": 50.0, "등락": "Neutral"}
         try:
             url = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata'
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': 'https://edition.cnn.com/'
-            }
+            headers = {'User-Agent': 'Mozilla/5.0'}
             r = requests.get(url, headers=headers, timeout=5)
             if r.status_code == 200:
                 data = r.json()
                 score = data['fear_and_greed']['score']
                 rating = data['fear_and_greed']['rating'].title()
                 fng_data = {"종목": "공포/탐욕", "현재가": float(score), "등락": rating}
-        except Exception as e:
-            print(f"CNN F&G Fetch Error: {e}")
-        
+        except:
+            pass
         results.append(fng_data)
 
-        # 3. yfinance 지수들
+        # yfinance 지수들
         for ticker_id, name in mapping.items():
             try:
                 ticker = yf.Ticker(ticker_id)
                 hist = ticker.history(period="5d")
                 
-                if hist.empty or len(hist) < 2:
-                    current_price = ticker.fast_info.get('lastPrice', 0.0)
-                    results.append({"종목": name, "현재가": float(current_price), "등락": "0.00%"})
-                    continue
+                val = 0.0
+                change_str = "0.00%"
                 
-                current_price = hist['Close'].iloc[-1]
-                prev_price = hist['Close'].iloc[-2]
-                change_pct = ((current_price - prev_price) / prev_price) * 100
+                if not hist.empty and len(hist) >= 2:
+                    val = float(hist['Close'].iloc[-1])
+                    prev = float(hist['Close'].iloc[-2])
+                    if not (math.isnan(val) or math.isnan(prev) or prev == 0):
+                        pct = ((val - prev) / prev) * 100
+                        change_str = f"{pct:+.2f}%"
                 
-                results.append({
-                    "종목": name,
-                    "현재가": float(current_price),
-                    "등락": f"{change_pct:+.2f}%"
-                })
+                if math.isnan(val): val = 0.0
+                results.append({"종목": name, "현재가": val, "등락": change_str})
             except Exception as e:
                 print(f"Error fetching {ticker_id}: {e}")
                 results.append({"종목": name, "현재가": 0.0, "등락": "0.00%"})

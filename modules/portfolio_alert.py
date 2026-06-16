@@ -1,6 +1,6 @@
 """
-포트폴리오 알림 시스템
-보유 종목 관련 중요 뉴스 및 이벤트 모니터링
+포트폴리오 알림 시스템 — 보유 종목 관련 중요 뉴스/이벤트 자동 감지 (RAG 기반).
+사용자 설정 가격 조건 알림은 modules/price_alert.py 를 사용한다.
 """
 import logging
 from typing import Dict, List, Optional
