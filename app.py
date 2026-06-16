@@ -246,12 +246,17 @@ def render_tab_tracker():
                 stance = k
                 break
 
+        # 미너비니식 포지션 사이징용 시드/리스크 (사용자 메타에서)
+        meta_now = _load_meta()
+        trading_seed = float(meta_now.get("trading_seed", 0) or 0)
+        risk_pct = float(meta_now.get("risk_pct", 1.0) or 1.0)
+
         @st.cache_data(ttl=300)
-        def cached_signals(h_key, st_key):
-            return generate_signals(get_portfolio_holdings(), st_key)
+        def cached_signals(h_key, st_key, seed_k, risk_k):
+            return generate_signals(get_portfolio_holdings(), st_key, seed_k, risk_k)
 
         with st.spinner("매매 시그널 계산 중..."):
-            signal_result = cached_signals(holdings_key, stance)
+            signal_result = cached_signals(holdings_key, stance, trading_seed, risk_pct)
 
         # 예측 기록 + 만기 도래분 자동 채점 (정확도 추적용, 하루 1회만)
         try:
@@ -391,7 +396,17 @@ def render_tab_tracker():
                 with sg2:
                     st.markdown("**🎯 매매 플랜:**")
                     if s.get("entry"):
-                        # 진입/손절/목표를 표로 명확하게
+                        # 진입/손절/목표 + 미너비니식 포지션 사이징
+                        size_html = ""
+                        if s.get("size_qty"):
+                            size_html = (
+                                f"<div style='margin-top:8px; padding-top:8px; "
+                                f"border-top:1px dashed rgba(255,255,255,0.1); font-size:0.85rem;'>"
+                                f"💰 <b>권장 매수</b>: <b style='color:#00FFA3'>{s['size_qty']:,}주</b> "
+                                f"(투입 ${s['size_invest']:,.0f} · 시드 {s['size_weight_pct']}%)<br>"
+                                f"<span style='color:#94A3B8; font-size:0.78rem;'>"
+                                f"최대 손실 ${s['size_max_loss']:,.0f} ({risk_pct}% 리스크 룰)</span></div>"
+                            )
                         st.markdown(
                             f"<div style='font-size:0.9rem; line-height:1.9;'>"
                             f"🟢 <b>진입</b>: {s['entry']:,.2f}<br>"
@@ -399,13 +414,42 @@ def render_tab_tracker():
                             f"<span style='color:#FF4B4B;'>({(s['stop']/s['entry']-1)*100:+.1f}%)</span><br>"
                             f"🎯 <b>목표</b>: {s['target']:,.2f} "
                             f"<span style='color:#00FFA3;'>({(s['target']/s['entry']-1)*100:+.1f}%)</span><br>"
-                            f"⚖️ <b>손익비</b>: 1 : {s['rr']}</div>",
+                            f"⚖️ <b>손익비</b>: 1 : {s['rr']}</div>"
+                            f"{size_html}",
                             unsafe_allow_html=True,
                         )
+                        if trading_seed == 0:
+                            st.caption("💡 포지션 사이징 활성화: 포트폴리오 탭 → '시드머니' 설정")
                     else:
                         st.markdown(f"- {s['plan']}")
                     if s.get("stop_price") and s.get("avg_price", 0) > 0:
                         st.caption(f"보유분 손절가(ATR): {s['stop_price']:,.2f} (평단 {s['avg_price']:,.2f})")
+
+                    # 미너비니식 계단식 청산 라인 (보유 종목 위주)
+                    ladder = s.get("exit_ladder", {})
+                    if ladder and s.get("avg_price", 0) > 0:
+                        hard_stop_str = f"{ladder['hard_stop']:,.2f}" if ladder.get("hard_stop") else "—"
+                        nxt = ladder.get("next_trigger")
+                        nxt_html = ""
+                        if nxt:
+                            nxt_html = (
+                                f"<div style='margin-top:4px; font-size:0.8rem; color:#FFD700;'>"
+                                f"▶ 다음 트리거: <b>{nxt['label']} (MA{10 if nxt['label']=='1차' else 20 if nxt['label']=='2차' else 50})</b> "
+                                f"{nxt['line']:,.2f} (현재가 {nxt['distance_pct']:+.1f}% 위) → {nxt['pct']}% 청산</div>"
+                            )
+                        st.markdown(
+                            f"<div style='margin-top:8px; padding:8px 10px; background:rgba(168,85,247,0.08); "
+                            f"border-left:3px solid #a855f7; border-radius:4px; font-size:0.8rem;'>"
+                            f"<b>📊 계단식 청산</b> (미너비니식)<br>"
+                            f"1차 {ladder['ladder_1']['line']:,.2f} → 30%<br>"
+                            f"2차 {ladder['ladder_2']['line']:,.2f} → 30%<br>"
+                            f"3차 {ladder['ladder_3']['line']:,.2f} → 40%<br>"
+                            f"하드스톱 {hard_stop_str} (-8%)"
+                            f"{nxt_html}"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+
                     st.markdown(
                         f"<span style='font-size:0.78rem; color:#64748B;'>"
                         f"지지 {s['support']:,.1f} · 저항 {s['resistance']:,.1f} · "
@@ -1904,6 +1948,34 @@ def render_tab_portfolio():
         tc3.metric("💵 현금", f"₩{cash_krw_total:,.0f}", delta=f"비중 {cash_ratio:.1f}%")
         tc4.metric("총 매입액", f"₩{total_cost:,.0f}")
         st.caption(f"환율 적용: $1 = ₩{fx:,.1f} (미국 주식·달러 현금은 원화 환산 합산)")
+
+        # ── 트레이딩 시드 / 리스크 설정 (미너비니식 포지션 사이징용) ──
+        meta_for_seed = _load_meta()
+        cur_seed = float(meta_for_seed.get("trading_seed", 0) or 0)
+        cur_risk = float(meta_for_seed.get("risk_pct", 1.0) or 1.0)
+        with st.expander(f"💰 트레이딩 시드 / 리스크 설정 (현재: ${cur_seed:,.0f} · {cur_risk}% 룰)"):
+            st.caption("📌 매매 시그널에서 미너비니식 자동 포지션 사이징(권장 매수 수량)을 계산할 때 사용합니다. "
+                       "1회 매매에 시드의 N%만 잃을 수 있게 매수 수량이 자동 조정됩니다.")
+            with st.form("seed_form"):
+                sd1, sd2, sd3 = st.columns([2, 2, 1])
+                with sd1:
+                    seed_in = st.text_input("매매 시드 ($)", value=f"{cur_seed:.0f}",
+                                            help="실제 매매에 쓸 수 있는 금액")
+                with sd2:
+                    risk_in = st.text_input("1회 리스크 (%)", value=f"{cur_risk}",
+                                            help="기본 1% — 미너비니 추천. 보수: 0.5%, 공격: 2%")
+                with sd3:
+                    st.write("")
+                    if st.form_submit_button("💾 저장", use_container_width=True):
+                        try:
+                            new_seed = float(seed_in.replace(",", "") or 0)
+                            new_risk = float(risk_in or 1.0)
+                            _save_meta(trading_seed=new_seed, risk_pct=new_risk)
+                            st.cache_data.clear()  # 시그널 캐시 무효화
+                            st.toast(f"💾 시드 ${new_seed:,.0f} · 리스크 {new_risk}% 저장")
+                            st.rerun()
+                        except ValueError:
+                            st.error("숫자만 입력하세요")
 
         # ── 현금 입력 ──
         with st.expander(f"💵 보유 현금 입력 (현재: ₩{cash['krw']:,.0f} + ${cash['usd']:,.2f})"):

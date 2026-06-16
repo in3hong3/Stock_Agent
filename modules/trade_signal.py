@@ -219,6 +219,7 @@ def analyze_stock(ticker: str, quantity: float = 0, avg_price: float = 0) -> Dic
     close = df["Close"]
     price = float(close.iloc[-1])
 
+    ma10 = float(close.rolling(10).mean().iloc[-1])
     ma20 = float(close.rolling(20).mean().iloc[-1])
     ma50 = float(close.rolling(50).mean().iloc[-1])
     ma200 = float(close.rolling(200).mean().iloc[-1]) if len(close) >= 200 else ma50
@@ -287,7 +288,8 @@ def analyze_stock(ticker: str, quantity: float = 0, avg_price: float = 0) -> Dic
         "ticker": ticker, "price": price, "quantity": quantity, "avg_price": avg_price,
         "profit_rate": round(profit_rate, 1) if profit_rate is not None else None,
         "setup": setup, "score": score, "reasons": reasons, "valuation": valuation,
-        "rsi": round(rsi, 1), "ma20": round(ma20, 2), "ma50": round(ma50, 2), "ma200": round(ma200, 2),
+        "rsi": round(rsi, 1), "ma10": round(ma10, 2), "ma20": round(ma20, 2),
+        "ma50": round(ma50, 2), "ma200": round(ma200, 2),
         "bb_lower": round(bb_lower, 2), "bb_upper": round(bb_upper, 2),
         "support": round(support, 2), "resistance": round(resistance, 2),
         "atr": round(atr, 2), "atr_pct": round(atr_pct, 1), "adx": round(adx, 1),
@@ -388,7 +390,65 @@ _PROFILE = {
 }
 
 
-def decide_action(analysis: Dict, stance: str, regime_mod: int) -> Dict[str, Any]:
+def calculate_position_size(entry: float, stop: float,
+                            seed: float, risk_pct: float = 1.0) -> Dict[str, Any]:
+    """
+    미너비니식 포지션 사이징.
+    - 1주당 손실 = entry - stop
+    - 최대 손실 = seed * risk_pct%
+    - 매수 수량 = 최대 손실 ÷ 1주당 손실
+    """
+    if not (entry and stop and seed) or entry <= stop:
+        return {}
+    max_loss = seed * (risk_pct / 100)
+    loss_per_share = entry - stop
+    qty = int(max_loss / loss_per_share)
+    invest = round(qty * entry, 2)
+    weight_pct = (invest / seed * 100) if seed > 0 else 0
+    return {
+        "size_qty": qty,
+        "size_invest": invest,
+        "size_weight_pct": round(weight_pct, 1),
+        "size_max_loss": round(max_loss, 2),
+    }
+
+
+def build_exit_ladder(analysis: Dict, avg_price: float = 0) -> Dict[str, Any]:
+    """
+    미너비니식 계단식 청산 라인:
+    - 1차 (30% 익절): 종가 < 10일선
+    - 2차 (30% 익절): 종가 < 20일선
+    - 3차 (40% 청산): 종가 < 50일선
+    - 하드 스톱 (-8%): 평단 대비
+    """
+    price = analysis.get("price")
+    ma10 = analysis.get("ma10")
+    ma20 = analysis.get("ma20")
+    ma50 = analysis.get("ma50")
+    if not all([price, ma10, ma20, ma50]):
+        return {}
+
+    # 가장 가까운 청산 트리거 찾기 (위에서부터: 10 > 20 > 50)
+    next_trigger = None
+    for label, line, pct in [("1차", ma10, 30), ("2차", ma20, 30), ("3차", ma50, 40)]:
+        if price > line:  # 아직 안 이탈
+            dist_pct = (price / line - 1) * 100
+            next_trigger = {"label": label, "line": line, "pct": pct, "distance_pct": round(dist_pct, 2)}
+            break
+
+    hard_stop = round(avg_price * 0.92, 2) if avg_price > 0 else None
+
+    return {
+        "ladder_1": {"line": round(ma10, 2), "pct": 30, "name": "10일선 이탈"},
+        "ladder_2": {"line": round(ma20, 2), "pct": 30, "name": "20일선 이탈"},
+        "ladder_3": {"line": round(ma50, 2), "pct": 40, "name": "50일선 이탈"},
+        "hard_stop": hard_stop,
+        "next_trigger": next_trigger,
+    }
+
+
+def decide_action(analysis: Dict, stance: str, regime_mod: int,
+                  seed: float = 0, risk_pct: float = 1.0) -> Dict[str, Any]:
     buy_th, strong_th, sell_th, atr_mult, target_rr, take_pct, max_stop_pct = _PROFILE.get(stance, _PROFILE["neutral"])
     val = analysis.get("valuation", {})
     val_score = val.get("score", 0)
@@ -462,24 +522,35 @@ def decide_action(analysis: Dict, stance: str, regime_mod: int) -> Dict[str, Any
     # 보유 종목 손절가 (평단 기준 ATR)
     stop_price = round(avg - atr_mult * atr, 2) if avg > 0 else None
 
+    # 미너비니식 포지션 사이징 (매수 신호 + 시드 입력 시)
+    position = {}
+    if entry and stop and seed > 0:
+        position = calculate_position_size(entry, stop, seed, risk_pct)
+
+    # 계단식 청산 라인 (모든 종목 — 매수/보유 둘 다 의미)
+    exit_ladder = build_exit_ladder(analysis, avg)
+
     return {
         "action": action, "icon": icon, "adj_score": score,
         "plan": plan, "entry": entry, "stop": stop, "target": target, "rr": rr,
         "stop_price": stop_price, "extra": extra,
+        **position,  # size_qty, size_invest, size_weight_pct, size_max_loss
+        "exit_ladder": exit_ladder,
     }
 
 
 # ──────────────────────────────────────────────
 # 4. 메인
 # ──────────────────────────────────────────────
-def generate_signals(holdings: List[Dict], stance: str = "aggressive") -> Dict[str, Any]:
+def generate_signals(holdings: List[Dict], stance: str = "aggressive",
+                     seed: float = 0, risk_pct: float = 1.0) -> Dict[str, Any]:
     regime = get_market_regime()
     signals = []
     for h in holdings:
         analysis = analyze_stock(h["ticker"], h.get("quantity", 0), h.get("avg_price", 0))
         if "error" in analysis:
             continue
-        decision = decide_action(analysis, stance, regime["score_modifier"])
+        decision = decide_action(analysis, stance, regime["score_modifier"], seed, risk_pct)
         signals.append({**analysis, **decision})
     signals.sort(key=lambda s: -abs(s["adj_score"]))
     return {"regime": regime, "signals": signals}
