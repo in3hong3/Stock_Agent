@@ -82,39 +82,99 @@ def render_market_summary():
 
 
 def render_ticker_tape():
-    """상단 티커 테이프 표시"""
+    """상단 지수 카드 — 야후 파이낸스 스타일 (한국식 색상: 빨강↑ / 파랑↓)."""
     from ui.theme import get_realtime_market_summary
     market_df = get_realtime_market_summary()
-    
-    # 7개 지수 표시 (공포탐욕, 다우, S&P500, 나스닥, 코스피, 환율, 비트코인)
-    cols = st.columns(7)
-    
+
     indices = ["공포/탐욕", "다우존스", "S&P 500", "나스닥 100", "코스피", "원달러환율", "비트코인"]
-    labels = ["Fear & Greed", "DOW", "S&P 500", "NASDAQ 100", "KOSPI", "USD/KRW", "Bitcoin"]
-    
-    if market_df is not None and not market_df.empty:
-        for i, (idx_name, label) in enumerate(zip(indices, labels)):
-            row = market_df[market_df['종목'] == idx_name]
-            if not row.empty:
-                val = row.iloc[0]['현재가']
-                change = row.iloc[0]['등락']
-                
-                # 포맷팅
-                if idx_name == "공포/탐욕":
-                    val_str = f"{val:.0f}"
-                elif idx_name == "원달러환율":
-                    val_str = f"{val:,.1f}"
-                elif idx_name == "비트코인":
-                    val_str = f"${val:,.0f}"
-                else:
-                    val_str = f"{val:,.0f}" if val > 1000 else f"{val:,.2f}"
-                
-                cols[i].metric(label, val_str, change)
-            else:
-                cols[i].metric(label, "N/A", "0.00%")
+    labels  = ["F&G", "DOW", "S&P 500", "NASDAQ 100", "KOSPI", "USD/KRW", "BTC"]
+
+    # 한국식 색상 — 상승=빨강, 하락=파랑, 보합=회색
+    UP, DOWN, FLAT, MUTED, MAIN = "#FF4B4B", "#4B7BFF", "#94A3B8", "#94A3B8", "#E2E8F0"
+
+    def _format_price(idx_name, val):
+        if val is None:
+            return "N/A"
+        if idx_name == "공포/탐욕":
+            return f"{val:.0f}"
+        if idx_name == "원달러환율":
+            return f"₩{val:,.1f}"
+        if idx_name == "비트코인":
+            return f"${val:,.0f}"
+        return f"{val:,.2f}" if val < 1000 else f"{val:,.0f}"
+
+    def _format_diff(idx_name, diff):
+        if idx_name == "공포/탐욕" or diff is None:
+            return ""
+        if idx_name in ("코스피", "원달러환율"):
+            return f"{diff:+,.2f}"
+        if idx_name == "비트코인":
+            return f"{diff:+,.0f}"
+        return f"{diff:+,.2f}"
+
+    cards = []
+    if market_df is None or market_df.empty:
+        for label in labels:
+            cards.append(
+                f"<div class='ti-card'><div class='ti-label'>{label}</div>"
+                f"<div class='ti-price'>N/A</div>"
+                f"<div class='ti-change' style='color:{MUTED};'>—</div></div>"
+            )
     else:
-        for i, label in enumerate(labels):
-            cols[i].metric(label, "N/A", "0.00%")
+        for idx_name, label in zip(indices, labels):
+            row = market_df[market_df['종목'] == idx_name]
+            if row.empty:
+                cards.append(
+                    f"<div class='ti-card'><div class='ti-label'>{label}</div>"
+                    f"<div class='ti-price'>N/A</div>"
+                    f"<div class='ti-change' style='color:{MUTED};'>—</div></div>"
+                )
+                continue
+
+            val = float(row.iloc[0]['현재가'] or 0)
+            change_str = str(row.iloc[0].get('등락', '0.00%'))
+            diff = float(row.iloc[0].get('등락값', 0) or 0)
+
+            # F&G는 rating 텍스트("Neutral" 등)가 change_str로 옴 — 색상 회색 고정
+            if idx_name == "공포/탐욕":
+                color = MUTED
+                arrow = ""
+                sub = change_str
+            else:
+                if diff > 0:
+                    color, arrow = UP, "▲"
+                elif diff < 0:
+                    color, arrow = DOWN, "▼"
+                else:
+                    color, arrow = FLAT, "—"
+                diff_str = _format_diff(idx_name, diff)
+                sub = f"{arrow} {diff_str} ({change_str})" if diff_str else f"{arrow} {change_str}"
+
+            cards.append(
+                f"<div class='ti-card'>"
+                f"<div class='ti-label'>{label}</div>"
+                f"<div class='ti-price'>{_format_price(idx_name, val)}</div>"
+                f"<div class='ti-change' style='color:{color};'>{sub}</div>"
+                f"</div>"
+            )
+
+    html = (
+        f"<style>"
+        f".ti-grid {{ display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:8px; margin:4px 0 14px; }}"
+        f".ti-card {{ background:#16181F; border:1px solid rgba(255,255,255,0.05); border-radius:10px;"
+        f"           padding:10px 12px; min-width:0; }}"
+        f".ti-label {{ font-size:11px; color:{MUTED}; letter-spacing:0.02em;"
+        f"            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}"
+        f".ti-price {{ font-size:18px; font-weight:600; color:{MAIN}; margin:4px 0 2px; line-height:1.2;"
+        f"            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}"
+        f".ti-change {{ font-size:11px; line-height:1.3; white-space:nowrap;"
+        f"             overflow:hidden; text-overflow:ellipsis; }}"
+        f"@media (max-width:900px) {{ .ti-grid {{ grid-template-columns: repeat(4, minmax(0,1fr)); }} }}"
+        f"@media (max-width:560px) {{ .ti-grid {{ grid-template-columns: repeat(2, minmax(0,1fr)); }} }}"
+        f"</style>"
+        f"<div class='ti-grid'>{''.join(cards)}</div>"
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_fear_greed_gauge(fg_value):

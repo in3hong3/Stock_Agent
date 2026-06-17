@@ -86,17 +86,25 @@ def get_realtime_market_summary():
 
                 val = float(last) if last is not None else 0.0
                 change_str = "0.00%"
+                change_value = 0.0
                 if (last is not None and prev is not None
                         and not math.isnan(float(last)) and not math.isnan(float(prev))
                         and float(prev) != 0):
-                    pct = (float(last) - float(prev)) / float(prev) * 100
+                    diff = float(last) - float(prev)
+                    pct = diff / float(prev) * 100
                     change_str = f"{pct:+.2f}%"
+                    change_value = diff
                 if math.isnan(val):
                     val = 0.0
-                results.append({"종목": name, "현재가": val, "등락": change_str})
+                results.append({
+                    "종목": name,
+                    "현재가": val,
+                    "등락": change_str,
+                    "등락값": change_value,
+                })
             except Exception as e:
                 print(f"Error fetching {ticker_id}: {e}")
-                results.append({"종목": name, "현재가": 0.0, "등락": "0.00%"})
+                results.append({"종목": name, "현재가": 0.0, "등락": "0.00%", "등락값": 0.0})
 
         return pd.DataFrame(results)
     except Exception as e:
