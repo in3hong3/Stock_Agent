@@ -134,6 +134,47 @@ def render_side_panel(fg_index, fg_status, status_text, point_color):
 
             pnl_color = "#FF4B4B" if a["pnl"] >= 0 else "#4B7BFF"
             usd_total = a["total"] / fx if fx else 0
+
+            # 종목별 평가액(달러) + 수익률 리스트 (평가액 큰 순)
+            items = []
+            for h in holdings:
+                try:
+                    qty = float(h.get("quantity", 0) or 0)
+                    cur = float(h.get("current_price", 0) or 0)
+                    avg = float(h.get("avg_price", 0) or 0)
+                except (TypeError, ValueError):
+                    continue
+                if qty <= 0 or cur <= 0:
+                    continue
+                is_kr = str(h.get("ticker", "")).endswith((".KS", ".KQ"))
+                eval_usd = (cur * qty / fx) if (is_kr and fx) else (cur * qty)
+                pr = (cur / avg - 1) * 100 if avg > 0 else None
+                items.append((str(h.get("ticker", "")), eval_usd, pr))
+            items.sort(key=lambda x: -x[1])
+
+            rows_html = ""
+            for ticker, ev, pr in items:
+                if isinstance(pr, (int, float)):
+                    pc = "#FF4B4B" if pr > 0 else "#4B7BFF" if pr < 0 else "#94A3B8"
+                    pr_str = f"{pr:+.1f}%"
+                else:
+                    pc, pr_str = "#94A3B8", "—"
+                rows_html += (
+                    f"<div style='display:flex; justify-content:space-between; font-size:0.78rem; padding:2px 0;'>"
+                    f"<span><b style='color:#E2E8F0;'>{ticker}</b> "
+                    f"<span style='color:#94A3B8;'>${ev:,.0f}</span></span>"
+                    f"<span style='color:{pc};'>{pr_str}</span></div>"
+                )
+
+            holdings_block = ""
+            if rows_html:
+                holdings_block = (
+                    f"<div style='border-top:1px solid #1f2230; margin:8px 0 4px;'></div>"
+                    f"<div style='font-size:0.72rem; color:#94A3B8; margin-bottom:2px;'>"
+                    f"보유 {len(items)}종목 (평가액 · 수익률)</div>"
+                    f"{rows_html}"
+                )
+
             st.markdown(
                 f"<div style='background:#16181F; border:1px solid rgba(255,255,255,0.05); "
                 f"border-radius:12px; padding:12px 14px;'>"
@@ -150,6 +191,7 @@ def render_side_panel(fg_index, fg_status, status_text, point_color):
                 f"<div style='display:flex; justify-content:space-between; font-size:0.8rem; padding:2px 0;'>"
                 f"<span style='color:#94A3B8;'>현금 비중</span>"
                 f"<span style='color:#E2E8F0;'>{a['cash_ratio']:.1f}%</span></div>"
+                f"{holdings_block}"
                 f"</div>",
                 unsafe_allow_html=True,
             )
