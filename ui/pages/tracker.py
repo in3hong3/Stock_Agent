@@ -80,6 +80,77 @@ def _render_accuracy_top_card():
     )
 
 
+def _render_holdings_card(snap_df, tracked, fx):
+    """종목별 보유 평가금액(달러)·비중·수익률을 한눈에 보이는 카드.
+
+    snap_df의 _eval_native(원본통화 평가액) + _is_kr로 달러 환산.
+    가격 누락 종목은 평가액 0 처리되어 카드에서 '—'로 표시.
+    """
+    if snap_df is None or snap_df.empty:
+        return
+
+    name_map = {it["ticker"]: it.get("name", it["ticker"]) for it in tracked}
+    qty_map = {it["ticker"]: it.get("quantity", 0) for it in tracked}
+
+    rows = []
+    for _, r in snap_df.iterrows():
+        ticker = r.get("티커", "")
+        eval_native = float(r.get("_eval_native", 0) or 0)
+        is_kr = bool(r.get("_is_kr", False))
+        eval_usd = (eval_native / fx) if (is_kr and fx) else eval_native
+        rows.append({
+            "ticker": ticker,
+            "name": name_map.get(ticker, ticker),
+            "qty": qty_map.get(ticker, 0),
+            "eval_usd": eval_usd,
+            "profit": r.get("수익률"),
+        })
+
+    total_usd = sum(x["eval_usd"] for x in rows) or 1.0
+    rows.sort(key=lambda x: -x["eval_usd"])
+
+    UP, DOWN, FLAT, MUTED, MAIN = "#FF4B4B", "#4B7BFF", "#94A3B8", "#94A3B8", "#E2E8F0"
+
+    cards = []
+    for x in rows:
+        weight = x["eval_usd"] / total_usd * 100
+        pr = x["profit"]
+        if isinstance(pr, (int, float)):
+            pcolor = UP if pr > 0 else DOWN if pr < 0 else FLAT
+            pr_str = f"{pr:+.1f}%"
+        else:
+            pcolor, pr_str = MUTED, "—"
+        eval_str = f"${x['eval_usd']:,.0f}" if x["eval_usd"] > 0 else "—"
+        cards.append(
+            f"<div style='background:#16181F; border:1px solid rgba(255,255,255,0.05); "
+            f"border-radius:10px; padding:10px 12px; min-width:0;'>"
+            f"<div style='display:flex; justify-content:space-between; align-items:baseline; gap:6px;'>"
+            f"<span style='font-size:12px; color:{MAIN}; font-weight:600; white-space:nowrap; "
+            f"overflow:hidden; text-overflow:ellipsis;'>{x['ticker']}</span>"
+            f"<span style='font-size:10px; color:{MUTED};'>{weight:.0f}%</span></div>"
+            f"<div style='font-size:16px; font-weight:600; color:{MAIN}; margin:3px 0 1px;'>{eval_str}</div>"
+            f"<div style='font-size:11px; color:{MUTED};'>{x['qty']:,.0f}주 · "
+            f"<span style='color:{pcolor};'>{pr_str}</span></div>"
+            f"</div>"
+        )
+
+    total_str = f"${total_usd:,.0f}" if total_usd > 1 else "—"
+    st.markdown(
+        f"<div style='background: linear-gradient(160deg, #14201C, #16181F); "
+        f"border:1px solid #1D9E7555; border-radius:14px; padding:14px 18px; margin-bottom:12px;'>"
+        f"<div style='display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;'>"
+        f"<span style='font-weight:700; font-size:1.0rem;'>💰 내 보유 현황</span>"
+        f"<span style='font-size:0.85rem; color:{MUTED};'>주식 평가액 합계 "
+        f"<b style='color:{MAIN}; font-size:1.0rem;'>{total_str}</b></span></div>"
+        f"<div style='display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:8px;'>"
+        f"{''.join(cards)}</div>"
+        f"<div style='font-size:0.72rem; color:{MUTED}; margin-top:8px;'>"
+        f"※ 달러 환산 (한국주는 $1=₩{fx:,.0f} 적용) · 비중은 주식 평가액 기준</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_tab_tracker():
     from modules.issue_tracker import (
         get_portfolio_holdings, get_snapshot,
@@ -137,6 +208,18 @@ def render_tab_tracker():
     with st.spinner("시세 조회 중..."):
         snap_df = cached_snapshot(holdings_key)
 
+    # 환율 (한국주 보유액 달러 환산용)
+    from modules.issue_tracker import get_usdkrw_rate
+
+    @st.cache_data(ttl=600)
+    def _cached_fx_actions():
+        return get_usdkrw_rate()
+
+    fx_rate = _cached_fx_actions() or 1400.0
+
+    # ── 💰 내 보유 현황 카드 (종목별 달러 평가액 · 비중 · 수익률) ──
+    _render_holdings_card(snap_df, tracked, fx_rate)
+
     # ── ✅ 오늘 할 일 + 🎯 매매 시그널 ──
     signal_result = None
     try:
@@ -172,7 +255,7 @@ def render_tab_tracker():
         except Exception as e:
             print(f"예측 기록 실패: {e}")
 
-        actions = build_actions(snap_df, tickers, stance, signals=signal_result["signals"])
+        actions = build_actions(snap_df, tickers, stance, signals=signal_result["signals"], fx=fx_rate)
         if actions:
             stance_badge = PERSONAS[stance]["label"]
             st.markdown(

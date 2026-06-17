@@ -43,12 +43,25 @@ def _stance_msg(situation: str, stance: str) -> str:
     return _STANCE_TEXT.get(situation, {}).get(stance, _STANCE_TEXT.get(situation, {}).get("neutral", ""))
 
 
+def _holding_str(s: Dict, fx: float) -> str:
+    """시그널 dict에서 보유 평가금액을 달러 기준 문자열로. 미보유면 빈 문자열."""
+    qty = s.get("quantity") or 0
+    price = s.get("price") or 0
+    if qty <= 0 or price <= 0:
+        return ""
+    is_kr = str(s.get("ticker", "")).endswith((".KS", ".KQ"))
+    eval_usd = (price * qty / fx) if (is_kr and fx) else (price * qty)
+    return f"보유 {qty:,.0f}주 (${eval_usd:,.0f})"
+
+
 def build_actions(snap_df: pd.DataFrame, tickers: List[str],
-                  stance: str = "aggressive", signals: List[Dict] = None) -> List[Dict[str, Any]]:
+                  stance: str = "aggressive", signals: List[Dict] = None,
+                  fx: float = 1400.0) -> List[Dict[str, Any]]:
     """
     오늘의 액션 리스트 생성.
     snap_df: get_snapshot() 결과 (티커/1일/RSI 컬럼 사용)
     signals: trade_signal.generate_signals()의 signals — 있으면 정밀 시그널 사용
+    fx: 원/달러 환율 (한국주 보유액 달러 환산용)
     Returns: [{priority(낮을수록 중요), icon, text}]
     """
     actions = []
@@ -84,9 +97,14 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
         # 정밀 시그널 엔진 결과 사용 (셋업 + 진입/손절/목표 기반)
         holds = []
         for s in signals:
+            hold_str = _holding_str(s, fx)
+            pr = s.get("profit_rate")
+            pr_str = f" {pr:+.1f}%" if pr is not None else ""
             if s["action"] == "관망":
-                holds.append(f"{s['ticker']}({s['adj_score']:+.0f})")
-                # 관망이라도 수익률 경고(손절/익절 라인)는 표시
+                # 관망 종목도 보유액·수익률은 요약줄에 함께 노출
+                tag = f"{s['ticker']}({s['adj_score']:+.0f}"
+                tag += f", {hold_str.replace('보유 ', '')}{pr_str})" if hold_str else f"{pr_str})"
+                holds.append(tag)
                 for ex in s.get("extra", []):
                     actions.append({"priority": 1, "icon": "⚠️", "text": f"**{s['ticker']}** {ex}"})
                 continue
@@ -97,10 +115,12 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                           f"(손익비 1:{s['rr']})")
             else:
                 detail = s["plan"]
+            # 보유 평가액 + 수익률을 액션 문구 앞부분에 노출 (직관적 포지션 파악)
+            hold_prefix = f" · {hold_str}{pr_str}" if hold_str else ""
             actions.append({
                 "priority": 1 if is_strong else 2,
                 "icon": s["icon"],
-                "text": f"**{s['ticker']} → {s['action']}** · {s.get('setup','')} — {detail}",
+                "text": f"**{s['ticker']} → {s['action']}**{hold_prefix} · {s.get('setup','')} — {detail}",
             })
             for ex in s.get("extra", []):
                 actions.append({"priority": 1, "icon": "⚠️", "text": f"**{s['ticker']}** {ex}"})
