@@ -82,7 +82,7 @@ def _render_accuracy_top_card():
 
 def render_tab_tracker():
     from modules.issue_tracker import (
-        get_portfolio_holdings, get_snapshot,
+        get_portfolio_holdings,
         fetch_ticker_news, summarize_all_issues,
     )
 
@@ -123,162 +123,28 @@ def render_tab_tracker():
 
     tickers = [it["ticker"] for it in tracked]
 
-    st.subheader(f"📊 실시간 현황 — 보유 {len(tracked)}종목")
-
-    @st.cache_data(ttl=300)
-    def cached_snapshot(holdings_key):
-        return get_snapshot(get_portfolio_holdings())
-
-    # current_price도 키에 포함 — 포트폴리오에서 가격만 갱신해도 캐시 무효화
     holdings_key = tuple(
         (h["ticker"], h["quantity"], h["avg_price"], h.get("current_price", 0))
         for h in tracked
     )
-    with st.spinner("시세 조회 중..."):
-        snap_df = cached_snapshot(holdings_key)
 
-    # 환율 (한국주 보유액 달러 환산용)
-    from modules.issue_tracker import get_usdkrw_rate
-
-    @st.cache_data(ttl=600)
-    def _cached_fx_actions():
-        return get_usdkrw_rate()
-
-    fx_rate = _cached_fx_actions() or 1400.0
-
-    # (보유 종목별 평가액·수익률은 오른쪽 사이드 '내 자산' 카드로 이동)
-
-    # ── ✅ 오늘 할 일 + 🎤 유튜버 알림 (좌우 2단 배치) ──
+    # ── 매매 시그널 (오늘 할 일/유튜버 알림은 오른쪽 사이드 패널로 이동) ──
+    from modules.portfolio_advisor import PERSONAS
     signal_result = None
-    todo_html = ""
-    video_html = ""
-
-    # 1) 오늘 할 일 + 매매 시그널 계산
+    trading_seed = 0.0
+    risk_pct = 1.0
     try:
-        from modules.daily_actions import build_actions
-        from modules.portfolio_advisor import PERSONAS
-        from modules.trade_signal import generate_signals
-
-        stance = "aggressive"
-        saved_label = st.session_state.get("advisor_stance", "")
-        for k, v in PERSONAS.items():
-            if saved_label.startswith(v["label"]):
-                stance = k
-                break
-
+        from ui.pages._meta import resolve_stance, get_cached_signals
+        stance = resolve_stance()
         meta_now = load_meta()
         trading_seed = float(meta_now.get("trading_seed", 0) or 0)
         risk_pct = float(meta_now.get("risk_pct", 1.0) or 1.0)
-
-        @st.cache_data(ttl=300)
-        def cached_signals(h_key, st_key, seed_k, risk_k):
-            return generate_signals(get_portfolio_holdings(), st_key, seed_k, risk_k)
-
-        with st.spinner("매매 시그널 계산 중..."):
-            signal_result = cached_signals(holdings_key, stance, trading_seed, risk_pct)
-
-        try:
-            from modules.signal_tracker import record_predictions, grade_predictions
-            _today_key = f"{datetime.date.today()}|{stance}"
-            if st.session_state.get("_pred_recorded") != _today_key:
-                record_predictions(signal_result["signals"], stance)
-                grade_predictions(horizon_days=10)
-                st.session_state["_pred_recorded"] = _today_key
-        except Exception as e:
-            print(f"예측 기록 실패: {e}")
-
-        actions = build_actions(snap_df, tickers, stance, signals=signal_result["signals"], fx=fx_rate)
-        if actions:
-            stance_badge = PERSONAS[stance]["label"]
-            todo_html = (
-                f"<div style='background: linear-gradient(160deg, #1A2340, #16181F); "
-                f"border: 1px solid #3b82f655; border-radius: 14px; padding: 14px 16px; "
-                f"margin-bottom: 12px; height: 100%;'>"
-                f"<div style='font-weight: 700; font-size: 1.0rem; margin-bottom: 8px;'>"
-                f"✅ 오늘 할 일 <span style='font-size: 0.72rem; color: #94A3B8;'>({stance_badge} · "
-                f"{datetime.date.today().strftime('%m/%d')})</span></div>"
-                + "".join(
-                    f"<div style='padding: 3px 0; font-size: 0.85rem; line-height: 1.5;'>"
-                    f"{a['icon']} {a['text'].replace('**', '<b>', 1).replace('**', '</b>', 1)}</div>"
-                    for a in actions[:8]
-                )
-                + "</div>"
-            )
+        signal_result = st.session_state.get("_signal_result")
+        if signal_result is None:
+            signal_result = get_cached_signals(holdings_key, stance, trading_seed, risk_pct)
     except Exception as e:
-        print(f"오늘 할 일 생성 실패: {e}")
+        print(f"시그널 계산 실패: {e}")
 
-    # 2) 유튜버 타이밍 알림 계산
-    try:
-        from modules.video_timing import (
-            get_active_alerts, load_alerts, refresh_alerts as _refresh_alerts,
-            needs_refresh as _needs_refresh,
-        )
-
-        if _needs_refresh(stale_hours=48) and not st.session_state.get("_video_refresh_attempted"):
-            st.session_state["_video_refresh_attempted"] = True
-            from utils.loading import ProgressBanner
-            try:
-                with ProgressBanner(
-                    title="유튜버 영상 알림 자동 갱신 중",
-                    total=2, icon="🎤",
-                ) as banner:
-                    banner.step("📺 최근 90일 영상 수집 중...")
-                    banner.step("🤖 AI가 시점 알림 추출 중... (15~30초)")
-                    _refresh_alerts(tracked, days=90)
-                    banner.done("✅ 갱신 완료!")
-            except Exception as ve:
-                print(f"자동 갱신 실패: {ve}")
-
-        alerts_data = load_alerts()
-        active_alerts = get_active_alerts()
-
-        if active_alerts:
-            gen_at = alerts_data.get("generated_at", "")
-            gen_label = gen_at[:16].replace("T", " ") if gen_at else "—"
-
-            cards = ""
-            for a in active_alerts[:6]:
-                ticker_badge = (
-                    f"<span style='background:#3b82f655; color:#60a5fa; padding:1px 6px; "
-                    f"border-radius:4px; font-size:0.72rem; font-weight:700;'>{a['ticker']}</span> "
-                    if a.get("ticker") else ""
-                )
-                link_html = (
-                    f"<a href='{a['video_link']}' target='_blank' style='color:#94A3B8; text-decoration:none;'>↗</a>"
-                    if a.get("video_link") else ""
-                )
-                cards += (
-                    f"<div style='padding:8px 0; border-top:1px solid rgba(255,255,255,0.06);'>"
-                    f"<div style='font-weight:600; font-size:0.85rem;'>"
-                    f"{a.get('level','')} {ticker_badge}{a.get('title','')}</div>"
-                    f"<div style='color:#94A3B8; font-size:0.78rem; margin-top:2px;'>💬 {a.get('message','')}</div>"
-                    f"<div style='color:#64748B; font-size:0.7rem; margin-top:2px;'>"
-                    f"📺 {a.get('source_video','')[:40]} ({a.get('source_date','')}) {link_html}</div>"
-                    f"</div>"
-                )
-
-            video_html = (
-                f"<div style='background: linear-gradient(160deg, #2A1845 0%, #16181F 100%); "
-                f"border: 1px solid #a855f755; border-radius: 14px; padding: 14px 16px; "
-                f"margin-bottom: 12px; height: 100%;'>"
-                f"<div style='font-weight: 700; font-size: 1.0rem; margin-bottom: 4px;'>"
-                f"🎤 유튜버 타이밍 알림 "
-                f"<span style='font-size: 0.7rem; color: #94A3B8;'>(이틀 1회 · {gen_label})</span></div>"
-                f"{cards}"
-                f"</div>"
-            )
-    except Exception as e:
-        print(f"유튜버 알림 표시 실패: {e}")
-
-    # 3) 좌우 2단 렌더 — 오늘 할 일(왼쪽) / 유튜버 알림(오른쪽)
-    if todo_html or video_html:
-        if todo_html and video_html:
-            col_todo, col_video = st.columns(2)
-            col_todo.markdown(todo_html, unsafe_allow_html=True)
-            col_video.markdown(video_html, unsafe_allow_html=True)
-        else:
-            # 한쪽만 있으면 전체 폭 사용
-            st.markdown(todo_html or video_html, unsafe_allow_html=True)
 
     # ── 🎯 상세 매매 시그널 ──
     if signal_result:
@@ -451,37 +317,6 @@ def render_tab_tracker():
     except Exception as e:
         st.warning(f"자산 추이 표시 실패: {e}")
 
-    snap_df = snap_df.drop(columns=["_eval_native", "_cost_native", "_is_kr"], errors="ignore")
-
-    name_map = {it["ticker"]: it["name"] for it in tracked}
-    qty_map = {it["ticker"]: it["quantity"] for it in tracked}
-    snap_df.insert(0, "종목명", snap_df["티커"].map(name_map))
-    snap_df.insert(2, "수량", snap_df["티커"].map(qty_map))
-
-    def color_change(val):
-        if isinstance(val, (int, float)):
-            if val > 0:
-                return "color: #FF4B4B; font-weight: 700;"
-            if val < 0:
-                return "color: #4B7BFF; font-weight: 700;"
-        return ""
-
-    def color_rsi(val):
-        if isinstance(val, (int, float)):
-            if val >= 70:
-                return "color: #FF4B4B;"
-            if val <= 30:
-                return "color: #00FFA3;"
-        return ""
-
-    styled = (
-        snap_df.style
-        .map(color_change, subset=["1일", "5일", "수익률"])
-        .map(color_rsi, subset=["RSI"])
-        .format({"1일": "{:+.2f}%", "5일": "{:+.2f}%", "수익률": "{:+.2f}%", "수량": "{:,.0f}"}, na_rep="-")
-    )
-    st.dataframe(styled, hide_index=True, use_container_width=True)
-    st.caption("수익률: 평단가 대비 · RSI: 🔴70↑ 과매수 / 🟢30↓ 과매도 · 5분 캐시")
 
     # ── 4. 전체 이슈 브리핑 ──
     st.markdown("---")

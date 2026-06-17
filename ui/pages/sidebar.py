@@ -1,8 +1,116 @@
-"""사이드 패널 (사용자 정보, 시장 심리, 일정 캘린더)."""
+"""사이드 패널 (사용자 정보, 시장 심리, 일정, 자산, 오늘 할 일, 유튜버 알림)."""
 import datetime
+import pandas as pd
 import streamlit as st
 
 from ui.components import render_fear_greed_bar
+
+
+def _render_todo_video(holdings, fx):
+    """오늘 할 일 + 유튜버 타이밍 알림 (사이드 세로 배치, 컴팩트)."""
+    from ui.pages._meta import resolve_stance, get_cached_signals, load_meta
+
+    if not holdings:
+        return
+
+    tickers = [h["ticker"] for h in holdings]
+    holdings_key = tuple(
+        (h["ticker"], h.get("quantity", 0), h.get("avg_price", 0), h.get("current_price", 0))
+        for h in holdings
+    )
+    stance = resolve_stance()
+    meta = load_meta()
+    seed = float(meta.get("trading_seed", 0) or 0)
+    risk = float(meta.get("risk_pct", 1.0) or 1.0)
+
+    # ── 오늘 할 일 ──
+    try:
+        from modules.daily_actions import build_actions
+        from modules.portfolio_advisor import PERSONAS
+
+        signal_result = get_cached_signals(holdings_key, stance, seed, risk)
+        st.session_state["_signal_result"] = signal_result  # 트래커가 재사용
+
+        # 예측 기록 + 채점 (하루 1회)
+        try:
+            from modules.signal_tracker import record_predictions, grade_predictions
+            _today_key = f"{datetime.date.today()}|{stance}"
+            if st.session_state.get("_pred_recorded") != _today_key:
+                record_predictions(signal_result["signals"], stance)
+                grade_predictions(horizon_days=10)
+                st.session_state["_pred_recorded"] = _today_key
+        except Exception as e:
+            print(f"예측 기록 실패: {e}")
+
+        actions = build_actions(pd.DataFrame(), tickers, stance,
+                                signals=signal_result["signals"], fx=fx)
+        if actions:
+            badge = PERSONAS[stance]["label"]
+            rows = "".join(
+                f"<div style='padding:3px 0; font-size:0.78rem; line-height:1.45;'>"
+                f"{a['icon']} {a['text'].replace('**', '<b>', 1).replace('**', '</b>', 1)}</div>"
+                for a in actions[:8]
+            )
+            st.markdown(
+                f"<div style='background:linear-gradient(160deg,#1A2340,#16181F); "
+                f"border:1px solid #3b82f655; border-radius:12px; padding:12px 14px; margin-bottom:10px;'>"
+                f"<div style='font-weight:700; font-size:0.9rem; margin-bottom:6px;'>"
+                f"✅ 오늘 할 일 <span style='font-size:0.68rem; color:#94A3B8;'>"
+                f"({badge} · {datetime.date.today().strftime('%m/%d')})</span></div>"
+                f"{rows}</div>",
+                unsafe_allow_html=True,
+            )
+    except Exception as e:
+        print(f"사이드 오늘 할 일 실패: {e}")
+
+    # ── 유튜버 타이밍 알림 ──
+    try:
+        from modules.video_timing import (
+            get_active_alerts, load_alerts, refresh_alerts as _refresh_alerts,
+            needs_refresh as _needs_refresh,
+        )
+
+        if _needs_refresh(stale_hours=48) and not st.session_state.get("_video_refresh_attempted"):
+            st.session_state["_video_refresh_attempted"] = True
+            from utils.loading import ProgressBanner
+            try:
+                with ProgressBanner(title="유튜버 영상 알림 자동 갱신 중", total=2, icon="🎤") as banner:
+                    banner.step("📺 최근 90일 영상 수집 중...")
+                    banner.step("🤖 AI가 시점 알림 추출 중... (15~30초)")
+                    _refresh_alerts(holdings, days=90)
+                    banner.done("✅ 갱신 완료!")
+            except Exception as ve:
+                print(f"자동 갱신 실패: {ve}")
+
+        alerts_data = load_alerts()
+        active_alerts = get_active_alerts()
+        if active_alerts:
+            gen_at = alerts_data.get("generated_at", "")
+            gen_label = gen_at[:10] if gen_at else "—"
+            cards = ""
+            for a in active_alerts[:5]:
+                tb = (f"<span style='background:#3b82f655; color:#60a5fa; padding:1px 5px; "
+                      f"border-radius:3px; font-size:0.68rem; font-weight:700;'>{a['ticker']}</span> "
+                      if a.get("ticker") else "")
+                link = (f"<a href='{a['video_link']}' target='_blank' style='color:#94A3B8; text-decoration:none;'>↗</a>"
+                        if a.get("video_link") else "")
+                cards += (
+                    f"<div style='padding:6px 0; border-top:1px solid rgba(255,255,255,0.06);'>"
+                    f"<div style='font-weight:600; font-size:0.78rem;'>{a.get('level','')} {tb}{a.get('title','')}</div>"
+                    f"<div style='color:#94A3B8; font-size:0.72rem; margin-top:2px;'>💬 {a.get('message','')}</div>"
+                    f"<div style='color:#64748B; font-size:0.66rem; margin-top:2px;'>"
+                    f"📺 {a.get('source_video','')[:30]} {link}</div></div>"
+                )
+            st.markdown(
+                f"<div style='background:linear-gradient(160deg,#2A1845,#16181F); "
+                f"border:1px solid #a855f755; border-radius:12px; padding:12px 14px; margin-bottom:10px;'>"
+                f"<div style='font-weight:700; font-size:0.9rem; margin-bottom:2px;'>"
+                f"🎤 유튜버 타이밍 <span style='font-size:0.66rem; color:#94A3B8;'>({gen_label})</span></div>"
+                f"{cards}</div>",
+                unsafe_allow_html=True,
+            )
+    except Exception as e:
+        print(f"사이드 유튜버 알림 실패: {e}")
 
 
 def render_mobile_nav(selected_tab: str = None):
@@ -197,3 +305,16 @@ def render_side_panel(fg_index, fg_status, status_text, point_color):
             )
     except Exception as e:
         print(f"사이드 자산 요약 실패: {e}")
+
+    # ── ✅ 오늘 할 일 + 🎤 유튜버 타이밍 알림 ──
+    st.divider()
+    try:
+        from modules.issue_tracker import get_usdkrw_rate
+
+        @st.cache_data(ttl=600)
+        def _todo_fx():
+            return get_usdkrw_rate()
+
+        _render_todo_video(holdings, _todo_fx() or 1400.0)
+    except Exception as e:
+        print(f"사이드 오늘할일/유튜버 실패: {e}")

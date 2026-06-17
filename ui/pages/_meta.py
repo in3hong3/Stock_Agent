@@ -46,6 +46,26 @@ def load_cash() -> dict:
     return {"krw": float(meta.get("cash_krw", 0) or 0), "usd": float(meta.get("cash_usd", 0) or 0)}
 
 
+def resolve_stance() -> str:
+    """session_state.advisor_stance(라벨) → stance 키('aggressive' 등). 기본 aggressive."""
+    from modules.portfolio_advisor import PERSONAS
+    saved_label = st.session_state.get("advisor_stance", "")
+    for k, v in PERSONAS.items():
+        if saved_label.startswith(v["label"]):
+            return k
+    return "aggressive"
+
+
+@st.cache_data(ttl=300)
+def get_cached_signals(holdings_key, stance, seed, risk):
+    """매매 시그널 캐시 — 사이드/트래커가 같은 결과를 공유 (중복 계산 방지).
+    holdings_key는 캐시 무효화용 (ticker/qty/avg/current_price 튜플).
+    """
+    from modules.trade_signal import generate_signals
+    from modules.issue_tracker import get_portfolio_holdings
+    return generate_signals(get_portfolio_holdings(), stance, seed, risk)
+
+
 def compute_total_assets(holdings: list, fx: float) -> dict:
     """보유 종목(csv current_price) + 현금으로 원화 기준 총자산 계산.
 
