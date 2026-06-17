@@ -46,11 +46,25 @@ def _render_todo_video(holdings, fx):
                                 signals=signal_result["signals"], fx=fx)
         if actions:
             badge = PERSONAS[stance]["label"]
-            rows = "".join(
-                f"<div style='padding:3px 0; font-size:0.78rem; line-height:1.45;'>"
-                f"{a['icon']} {a['text'].replace('**', '<b>', 1).replace('**', '</b>', 1)}</div>"
-                for a in actions[:8]
-            )
+
+            def _fmt_action(a):
+                # **굵게** → <b>, 좁은 사이드 가독성 위해 '—' 기준 2줄로 분리
+                txt = a["text"].replace("**", "<b>", 1).replace("**", "</b>", 1)
+                if " — " in txt:
+                    head, detail = txt.split(" — ", 1)
+                    body = (
+                        f"<div style='word-break:keep-all;'>{a['icon']} {head}</div>"
+                        f"<div style='color:#94A3B8; font-size:0.7rem; padding-left:16px; "
+                        f"margin-top:1px; word-break:keep-all;'>↳ {detail}</div>"
+                    )
+                else:
+                    body = f"<div style='word-break:keep-all;'>{a['icon']} {txt}</div>"
+                return (
+                    f"<div style='padding:6px 0; font-size:0.78rem; line-height:1.5; "
+                    f"border-top:1px solid rgba(255,255,255,0.05);'>{body}</div>"
+                )
+
+            rows = "".join(_fmt_action(a) for a in actions[:8])
             st.markdown(
                 f"<div style='background:linear-gradient(160deg,#1A2340,#16181F); "
                 f"border:1px solid #3b82f655; border-radius:12px; padding:12px 14px; margin-bottom:10px;'>"
