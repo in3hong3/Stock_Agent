@@ -220,8 +220,12 @@ def render_tab_tracker():
     # ── 💰 내 보유 현황 카드 (종목별 달러 평가액 · 비중 · 수익률) ──
     _render_holdings_card(snap_df, tracked, fx_rate)
 
-    # ── ✅ 오늘 할 일 + 🎯 매매 시그널 ──
+    # ── ✅ 오늘 할 일 + 🎤 유튜버 알림 (좌우 2단 배치) ──
     signal_result = None
+    todo_html = ""
+    video_html = ""
+
+    # 1) 오늘 할 일 + 매매 시그널 계산
     try:
         from modules.daily_actions import build_actions
         from modules.portfolio_advisor import PERSONAS
@@ -258,24 +262,24 @@ def render_tab_tracker():
         actions = build_actions(snap_df, tickers, stance, signals=signal_result["signals"], fx=fx_rate)
         if actions:
             stance_badge = PERSONAS[stance]["label"]
-            st.markdown(
+            todo_html = (
                 f"<div style='background: linear-gradient(160deg, #1A2340, #16181F); "
-                f"border: 1px solid #3b82f655; border-radius: 14px; padding: 16px 20px; margin-bottom: 12px;'>"
-                f"<div style='font-weight: 700; font-size: 1.05rem; margin-bottom: 10px;'>"
-                f"✅ 오늘 할 일 <span style='font-size: 0.75rem; color: #94A3B8;'>({stance_badge} 기준 · "
+                f"border: 1px solid #3b82f655; border-radius: 14px; padding: 14px 16px; "
+                f"margin-bottom: 12px; height: 100%;'>"
+                f"<div style='font-weight: 700; font-size: 1.0rem; margin-bottom: 8px;'>"
+                f"✅ 오늘 할 일 <span style='font-size: 0.72rem; color: #94A3B8;'>({stance_badge} · "
                 f"{datetime.date.today().strftime('%m/%d')})</span></div>"
                 + "".join(
-                    f"<div style='padding: 4px 0; font-size: 0.92rem; line-height: 1.6;'>"
+                    f"<div style='padding: 3px 0; font-size: 0.85rem; line-height: 1.5;'>"
                     f"{a['icon']} {a['text'].replace('**', '<b>', 1).replace('**', '</b>', 1)}</div>"
-                    for a in actions[:10]
+                    for a in actions[:8]
                 )
-                + "</div>",
-                unsafe_allow_html=True,
+                + "</div>"
             )
     except Exception as e:
         print(f"오늘 할 일 생성 실패: {e}")
 
-    # ── 🎤 유튜버 타이밍 알림 ──
+    # 2) 유튜버 타이밍 알림 계산
     try:
         from modules.video_timing import (
             get_active_alerts, load_alerts, refresh_alerts as _refresh_alerts,
@@ -305,10 +309,10 @@ def render_tab_tracker():
             gen_label = gen_at[:16].replace("T", " ") if gen_at else "—"
 
             cards = ""
-            for a in active_alerts[:8]:
+            for a in active_alerts[:6]:
                 ticker_badge = (
-                    f"<span style='background:#3b82f655; color:#60a5fa; padding:2px 8px; "
-                    f"border-radius:4px; font-size:0.78rem; font-weight:700;'>{a['ticker']}</span> "
+                    f"<span style='background:#3b82f655; color:#60a5fa; padding:1px 6px; "
+                    f"border-radius:4px; font-size:0.72rem; font-weight:700;'>{a['ticker']}</span> "
                     if a.get("ticker") else ""
                 )
                 link_html = (
@@ -316,28 +320,37 @@ def render_tab_tracker():
                     if a.get("video_link") else ""
                 )
                 cards += (
-                    f"<div style='padding:10px 0; border-top:1px solid rgba(255,255,255,0.06);'>"
-                    f"<div style='font-weight:600; font-size:0.93rem;'>"
+                    f"<div style='padding:8px 0; border-top:1px solid rgba(255,255,255,0.06);'>"
+                    f"<div style='font-weight:600; font-size:0.85rem;'>"
                     f"{a.get('level','')} {ticker_badge}{a.get('title','')}</div>"
-                    f"<div style='color:#94A3B8; font-size:0.85rem; margin-top:3px;'>💬 {a.get('message','')}</div>"
-                    f"<div style='color:#64748B; font-size:0.75rem; margin-top:3px;'>"
-                    f"📺 {a.get('source_video','')[:55]} ({a.get('source_date','')}) {link_html}</div>"
+                    f"<div style='color:#94A3B8; font-size:0.78rem; margin-top:2px;'>💬 {a.get('message','')}</div>"
+                    f"<div style='color:#64748B; font-size:0.7rem; margin-top:2px;'>"
+                    f"📺 {a.get('source_video','')[:40]} ({a.get('source_date','')}) {link_html}</div>"
                     f"</div>"
                 )
 
-            st.markdown(
+            video_html = (
                 f"<div style='background: linear-gradient(160deg, #2A1845 0%, #16181F 100%); "
-                f"border: 1px solid #a855f755; border-radius: 14px; padding: 16px 20px; margin-bottom: 12px;'>"
-                f"<div style='font-weight: 700; font-size: 1.05rem; margin-bottom: 6px;'>"
+                f"border: 1px solid #a855f755; border-radius: 14px; padding: 14px 16px; "
+                f"margin-bottom: 12px; height: 100%;'>"
+                f"<div style='font-weight: 700; font-size: 1.0rem; margin-bottom: 4px;'>"
                 f"🎤 유튜버 타이밍 알림 "
-                f"<span style='font-size: 0.75rem; color: #94A3B8;'>"
-                f"(RAG 영상 분석 · 이틀에 1회 자동 갱신 · 마지막 {gen_label})</span></div>"
+                f"<span style='font-size: 0.7rem; color: #94A3B8;'>(이틀 1회 · {gen_label})</span></div>"
                 f"{cards}"
-                f"</div>",
-                unsafe_allow_html=True,
+                f"</div>"
             )
     except Exception as e:
         print(f"유튜버 알림 표시 실패: {e}")
+
+    # 3) 좌우 2단 렌더 — 오늘 할 일(왼쪽) / 유튜버 알림(오른쪽)
+    if todo_html or video_html:
+        if todo_html and video_html:
+            col_todo, col_video = st.columns(2)
+            col_todo.markdown(todo_html, unsafe_allow_html=True)
+            col_video.markdown(video_html, unsafe_allow_html=True)
+        else:
+            # 한쪽만 있으면 전체 폭 사용
+            st.markdown(todo_html or video_html, unsafe_allow_html=True)
 
     # ── 🎯 상세 매매 시그널 ──
     if signal_result:
