@@ -500,40 +500,9 @@ def render_tab_tracker():
     except Exception as e:
         print(f"정확도 추적 표시 실패: {e}")
 
-    # ── 총 자산 요약 ──
+    # ── 📈 자산 추이 차트 (숫자 요약은 오른쪽 사이드 '내 자산'으로 이동) ──
     try:
-        from modules.issue_tracker import get_usdkrw_rate
-
-        @st.cache_data(ttl=600)
-        def cached_fx_tracker():
-            return get_usdkrw_rate()
-
-        fx = cached_fx_tracker()
-        fx_factor = snap_df["_is_kr"].map(lambda kr: 1.0 if kr else fx)
-        # 가격 누락(NaN) 종목은 합산에서 제외 (사용자에겐 상단 경고로 안내)
-        stock_eval = float((snap_df["_eval_native"].fillna(0) * fx_factor).sum())
-        stock_cost = float((snap_df["_cost_native"].fillna(0) * fx_factor).sum())
-        pnl = stock_eval - stock_cost
-        pnl_rate = (pnl / stock_cost * 100) if stock_cost > 0 else 0
-
-        from ui.pages._meta import load_cash
-        cash = load_cash()
-        cash_total = cash["krw"] + cash["usd"] * fx
-        total_asset = stock_eval + cash_total
-        cash_ratio = (cash_total / total_asset * 100) if total_asset > 0 else 0
-
-        # 일부 가격 누락이면 ⚠️ 표시 (이미 상단 경고와 별개로 메트릭에도 신호)
-        eval_suffix = " ⚠️" if missing_price else ""
-
-        tm1, tm2, tm3, tm4 = st.columns(4)
-        tm1.metric("💰 총 자산", f"₩{total_asset:,.0f}{eval_suffix}", delta=f"${total_asset / fx:,.0f}")
-        tm2.metric("📈 주식 평가액", f"₩{stock_eval:,.0f}{eval_suffix}")
-        tm3.metric("📊 총 손익", f"₩{pnl:,.0f}", delta=f"{pnl_rate:+.2f}%")
-        tm4.metric("💵 현금 비중", f"{cash_ratio:.1f}%", delta=f"₩{cash_total:,.0f}")
-
-        from utils.portfolio_utils import record_asset_snapshot, load_asset_history
-        if total_asset > 0:
-            record_asset_snapshot(total_asset, stock_eval, cash_total)
+        from utils.portfolio_utils import load_asset_history
 
         history = load_asset_history()
         with st.expander(f"📈 자산 추이 ({len(history)}일 기록됨)", expanded=False):
@@ -552,7 +521,7 @@ def render_tab_tracker():
 
         st.markdown("---")
     except Exception as e:
-        st.warning(f"총 자산 계산 실패: {e}")
+        st.warning(f"자산 추이 표시 실패: {e}")
 
     snap_df = snap_df.drop(columns=["_eval_native", "_cost_native", "_is_kr"], errors="ignore")
 

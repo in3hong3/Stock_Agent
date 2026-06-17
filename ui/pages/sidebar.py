@@ -114,3 +114,44 @@ def render_side_panel(fg_index, fg_status, status_text, point_color):
                     remove_custom_event(i)
                     st.cache_data.clear()
                     st.rerun()
+
+    # ── 💰 총 자산 미니 요약 (어느 탭에서든 항상 보임) ──
+    st.divider()
+    try:
+        from modules.issue_tracker import get_usdkrw_rate
+        from ui.pages._meta import compute_total_assets
+        from utils.portfolio_utils import record_asset_snapshot
+
+        @st.cache_data(ttl=600)
+        def _side_fx():
+            return get_usdkrw_rate()
+
+        fx = _side_fx() or 1400.0
+        a = compute_total_assets(holdings, fx)
+        if a["total"] > 0:
+            # 자산 추이 기록 (하루치 누적 — 트래커 자산추이 차트가 이 데이터를 읽음)
+            record_asset_snapshot(a["total"], a["stock_eval"], a["cash_total"])
+
+            pnl_color = "#FF4B4B" if a["pnl"] >= 0 else "#4B7BFF"
+            usd_total = a["total"] / fx if fx else 0
+            st.markdown(
+                f"<div style='background:#16181F; border:1px solid rgba(255,255,255,0.05); "
+                f"border-radius:12px; padding:12px 14px;'>"
+                f"<div style='font-size:0.85rem; font-weight:700; margin-bottom:8px;'>💰 내 자산</div>"
+                f"<div style='font-size:1.35rem; font-weight:700; color:#E2E8F0; line-height:1.1;'>"
+                f"₩{a['total']:,.0f}</div>"
+                f"<div style='font-size:0.72rem; color:#94A3B8; margin:2px 0 8px;'>≈ ${usd_total:,.0f}</div>"
+                f"<div style='display:flex; justify-content:space-between; font-size:0.8rem; padding:2px 0;'>"
+                f"<span style='color:#94A3B8;'>주식 평가</span>"
+                f"<span style='color:#E2E8F0;'>₩{a['stock_eval']:,.0f}</span></div>"
+                f"<div style='display:flex; justify-content:space-between; font-size:0.8rem; padding:2px 0;'>"
+                f"<span style='color:#94A3B8;'>평가 손익</span>"
+                f"<span style='color:{pnl_color}; font-weight:700;'>{a['pnl']:+,.0f} ({a['pnl_rate']:+.1f}%)</span></div>"
+                f"<div style='display:flex; justify-content:space-between; font-size:0.8rem; padding:2px 0;'>"
+                f"<span style='color:#94A3B8;'>현금 비중</span>"
+                f"<span style='color:#E2E8F0;'>{a['cash_ratio']:.1f}%</span></div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+    except Exception as e:
+        print(f"사이드 자산 요약 실패: {e}")

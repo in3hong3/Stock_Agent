@@ -46,6 +46,39 @@ def load_cash() -> dict:
     return {"krw": float(meta.get("cash_krw", 0) or 0), "usd": float(meta.get("cash_usd", 0) or 0)}
 
 
+def compute_total_assets(holdings: list, fx: float) -> dict:
+    """보유 종목(csv current_price) + 현금으로 원화 기준 총자산 계산.
+
+    한국주(.KS/.KQ)는 그대로, 그 외(달러)는 fx 곱해서 원화 환산.
+    가격 누락 종목은 평가액 0 처리. 트래커/사이드가 같은 값을 쓰도록 단일화.
+    """
+    cash = load_cash()
+    stock_eval = 0.0
+    stock_cost = 0.0
+    for h in holdings or []:
+        try:
+            qty = float(h.get("quantity", 0) or 0)
+            cur = float(h.get("current_price", 0) or 0)
+            avg = float(h.get("avg_price", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        is_kr = str(h.get("ticker", "")).endswith((".KS", ".KQ"))
+        factor = 1.0 if is_kr else fx
+        stock_eval += qty * cur * factor
+        stock_cost += qty * avg * factor
+
+    pnl = stock_eval - stock_cost
+    pnl_rate = (pnl / stock_cost * 100) if stock_cost > 0 else 0.0
+    cash_total = cash["krw"] + cash["usd"] * fx
+    total = stock_eval + cash_total
+    cash_ratio = (cash_total / total * 100) if total > 0 else 0.0
+    return {
+        "stock_eval": stock_eval, "stock_cost": stock_cost,
+        "pnl": pnl, "pnl_rate": pnl_rate,
+        "cash_total": cash_total, "total": total, "cash_ratio": cash_ratio,
+    }
+
+
 def auto_fill_missing_prices(session_key: str = "_auto_price_fill_done"):
     """portfolio.csv에서 current_price가 비어있는 종목을 yfinance로 자동 채움.
 
