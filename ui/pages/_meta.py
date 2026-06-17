@@ -49,11 +49,12 @@ def load_cash() -> dict:
 def auto_fill_missing_prices(session_key: str = "_auto_price_fill_done"):
     """portfolio.csv에서 current_price가 비어있는 종목을 yfinance로 자동 채움.
 
-    각 페이지 진입 시 1회만 시도 (session_state 가드). 이후 가격 업데이트 버튼
-    수동 실행 흐름과 충돌하지 않음. 채움이 일어났으면 rerun으로 갱신.
+    가드 없음 — 페이지 진입 시 빈 가격이 있으면 항상 시도. 빈 가격 종목이 없으면
+    yfinance 호출 자체가 일어나지 않으므로 비용/지연 부담 없음. (사용자가 명시적으로
+    가격 업데이트 버튼을 누르는 흐름과 무관.)
     """
-    if st.session_state.get(session_key):
-        return False
+    # session_key 인자는 호환성 유지용 — 더 이상 가드로 사용하지 않음.
+    _ = session_key
 
     try:
         path = portfolio_path()
@@ -62,21 +63,15 @@ def auto_fill_missing_prices(session_key: str = "_auto_price_fill_done"):
         df = pd.read_csv(path)
     except Exception as e:
         print(f"가격 자동 채움 — CSV 로드 실패: {e}")
-        st.session_state[session_key] = True
         return False
 
     if df.empty or "current_price" not in df.columns:
-        st.session_state[session_key] = True
         return False
 
     df["current_price"] = pd.to_numeric(df["current_price"], errors="coerce")
     missing_mask = df["current_price"].isna() | (df["current_price"] <= 0)
     if not missing_mask.any():
-        st.session_state[session_key] = True
         return False
-
-    # 이번 진입에서는 한 번만 시도 (실패해도 무한루프 방지)
-    st.session_state[session_key] = True
 
     missing_tickers = df.loc[missing_mask, "ticker"].astype(str).tolist()
     from utils.price_updater import PriceUpdater
@@ -85,14 +80,22 @@ def auto_fill_missing_prices(session_key: str = "_auto_price_fill_done"):
     with st.spinner(f"💸 빈 가격 자동 갱신 중 ({len(missing_tickers)}종목)..."):
         filled = []
         failed = []
-        # 배치 시도 후 실패한 것만 개별 fallback
-        batch = updater.get_batch_prices(missing_tickers)
+        # 빈 가격 종목 수가 적으면 batch yf.download(1m interval)가 휴장/장외에
+        # 빈 결과를 자주 줘서 fallback이 더 자주 호출됨. 종목 5개 이하면 처음부터
+        # 안정적인 fast_info 경로(get_current_price)를 직접 사용한다.
+        if len(missing_tickers) > 5:
+            batch = updater.get_batch_prices(missing_tickers)
+        else:
+            batch = {}
+        import math
         for idx in df.index[missing_mask]:
             ticker = str(df.at[idx, "ticker"])
             price = batch.get(ticker)
-            if price is None:
+            # NaN 비교는 항상 False라 따로 잡아야 fallback이 호출됨
+            invalid = price is None or (isinstance(price, float) and math.isnan(price)) or price <= 0
+            if invalid:
                 price = updater.get_current_price(ticker)
-            if price and price > 0:
+            if price and not (isinstance(price, float) and math.isnan(price)) and price > 0:
                 df.at[idx, "current_price"] = float(price)
                 filled.append(ticker)
             else:

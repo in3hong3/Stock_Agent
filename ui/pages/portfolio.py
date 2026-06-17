@@ -361,7 +361,7 @@ def render_tab_portfolio():
     st.markdown("---")
     ic1, ic2 = st.columns([3, 2])
     with ic1:
-        st.info("💡 표에서 바로 수정하세요. 변경사항은 **자동 저장**됩니다. 행 삭제는 왼쪽 체크 후 Delete 키.")
+        st.info("💡 표에서 수정하고 아래 **'💾 변경사항 저장'** 버튼을 눌러주세요. 저장 전까진 CSV에 반영되지 않습니다. 행 삭제는 왼쪽 체크 후 Delete 키.")
     with ic2:
         st.info(f"🕐 **현재가 기준**: {load_price_timestamp()}  \n"
                 f"(yfinance 시세 — 장중 약 15분 지연, 장 마감 후엔 종가)")
@@ -398,10 +398,26 @@ def render_tab_portfolio():
 
     edited_df = edited_df[_CORE_COLS].copy()
 
-    if not edited_df.equals(st.session_state.df_portfolio[_CORE_COLS]):
-        edited_df.to_csv(PORTFOLIO_FILE, index=False)
-        st.session_state.df_portfolio = edited_df.copy()
-        st.toast("💾 자동 저장됨")
+    # 변경사항이 있으면 저장 버튼 노출 (자동 저장 X — 사용자 명시 저장 시에만 CSV 반영).
+    has_unsaved = not edited_df.equals(st.session_state.df_portfolio[_CORE_COLS])
+    sc1, sc2 = st.columns([3, 1])
+    with sc1:
+        if has_unsaved:
+            st.warning("⚠️ 저장되지 않은 변경사항이 있습니다.")
+        else:
+            st.success("✅ 모든 변경사항이 저장된 상태입니다.")
+    with sc2:
+        if st.button("💾 변경사항 저장", type="primary", use_container_width=True,
+                     disabled=not has_unsaved, key="save_portfolio_btn"):
+            edited_df.to_csv(PORTFOLIO_FILE, index=False)
+            st.session_state.df_portfolio = edited_df.copy()
+            # 트래커의 cached_snapshot / cached_signals 등 가격·수량 의존 캐시 무효화
+            st.cache_data.clear()
+            # 다음 트래커 진입에 자동 가격 채움이 다시 돌도록 가드 해제
+            for key in ("_auto_price_fill_done", "_auto_price_fill_done_portfolio"):
+                st.session_state.pop(key, None)
+            st.toast("💾 저장 완료 — '📌 내 종목' 탭에 즉시 반영")
+            st.rerun()
 
     try:
         from modules.issue_tracker import get_usdkrw_rate

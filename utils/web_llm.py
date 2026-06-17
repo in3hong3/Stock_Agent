@@ -49,6 +49,22 @@ def search_generate(system: str, prompt: str,
 # ──────────────────────────────────────────────
 # Perplexity (sonar — 검색 내장, OpenAI 호환 API)
 # ──────────────────────────────────────────────
+_PPLX_TRUSTED_DOMAINS = [
+    # 글로벌 1차 매체
+    "reuters.com", "bloomberg.com", "wsj.com", "ft.com",
+    "cnbc.com", "marketwatch.com", "barrons.com",
+    # 주식 전문
+    "seekingalpha.com", "benzinga.com",
+    # 공식/규제
+    "sec.gov", "nasdaq.com",
+    # yfinance 출처
+    "finance.yahoo.com",
+    # 한국 매체
+    "hankyung.com", "mk.co.kr", "edaily.co.kr", "mt.co.kr",
+    "thebell.co.kr", "businesspost.co.kr",
+]
+
+
 def _perplexity_generate(system: str, prompt: str, max_tokens: int) -> str:
     from openai import OpenAI
 
@@ -56,6 +72,12 @@ def _perplexity_generate(system: str, prompt: str, max_tokens: int) -> str:
         api_key=os.getenv("PERPLEXITY_API_KEY"),
         base_url="https://api.perplexity.ai",
     )
+
+    # Perplexity sonar 전용 옵션:
+    # - search_recency_filter='week' → 옛 기사(분할 전 가격 등) 인용 방지
+    # - search_domain_filter=... → 신뢰성 매체로 좁힘
+    # OpenAI SDK는 모르는 키를 `extra_body`로 그대로 전달함.
+    recency = os.getenv("PERPLEXITY_RECENCY", "week")  # day/week/month/year
     response = client.chat.completions.create(
         model=os.getenv("PERPLEXITY_MODEL", "sonar-pro"),
         messages=[
@@ -64,10 +86,13 @@ def _perplexity_generate(system: str, prompt: str, max_tokens: int) -> str:
         ],
         max_tokens=max_tokens,
         temperature=0.4,
+        extra_body={
+            "search_recency_filter": recency,
+            "search_domain_filter": _PPLX_TRUSTED_DOMAINS,
+        },
     )
     text = response.choices[0].message.content or "응답을 생성하지 못했습니다."
 
-    # 출처 인용 추가 (Perplexity는 citations 필드로 검색 출처를 반환)
     citations = getattr(response, "citations", None)
     if citations:
         sources = "\n".join(f"{i}. {url}" for i, url in enumerate(citations[:10], 1))

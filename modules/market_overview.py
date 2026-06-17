@@ -2,6 +2,7 @@
 시장 종합 현황 (매크로 지표 + 시장 이슈)
 달러 인덱스, 금리, VIX, 원자재 등 매크로 지표와 시장 전반 뉴스를 제공한다.
 """
+import math
 from typing import Dict, List, Any
 import pandas as pd
 import yfinance as yf
@@ -36,14 +37,23 @@ def get_macro_data() -> List[Dict[str, Any]]:
             if df.empty or len(df) < 2:
                 results.append({"name": name, "value_str": "N/A", "change_pct": None, "spark": []})
                 continue
-            close = df["Close"]
+            # NaN 행 제거 후 마지막 두 값이 유효한지 확인
+            close = df["Close"].dropna()
+            if len(close) < 2:
+                results.append({"name": name, "value_str": "N/A", "change_pct": None, "spark": []})
+                continue
             value = float(close.iloc[-1])
-            change = (value / float(close.iloc[-2]) - 1) * 100
+            prev = float(close.iloc[-2])
+            if math.isnan(value) or math.isnan(prev) or prev == 0:
+                results.append({"name": name, "value_str": "N/A", "change_pct": None, "spark": []})
+                continue
+            change = (value / prev - 1) * 100
+            spark = [round(float(v), 4) for v in close.tolist() if not math.isnan(float(v))]
             results.append({
                 "name": name,
                 "value_str": fmt.format(value),
                 "change_pct": round(change, 2),
-                "spark": [round(float(v), 4) for v in close.tolist()],
+                "spark": spark,
             })
         except Exception as e:
             print(f"매크로 지표 실패 ({ticker}): {e}")

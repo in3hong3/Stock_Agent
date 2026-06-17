@@ -266,12 +266,12 @@ class PriceUpdater:
             # 티커 정규화
             normalized_tickers = [self._normalize_ticker(t) for t in tickers if t != 'USD']
             
-            # 배치 조회
+            # 배치 조회 — interval='1m'은 휴장/장외에 빈 결과를 자주 줘서 5d 일봉 사용
             if normalized_tickers:
                 data = yf.download(
                     tickers=normalized_tickers,
-                    period='1d',
-                    interval='1m',
+                    period='5d',
+                    interval='1d',
                     group_by='ticker',
                     progress=False
                 )

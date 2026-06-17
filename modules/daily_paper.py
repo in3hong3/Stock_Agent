@@ -253,9 +253,19 @@ def compose_front_page_search(
     """
     from utils.web_llm import search_generate
 
-    holdings_line = ", ".join(
-        f"{h['name']}({h['ticker']})" for h in holdings
-    ) or "보유 종목 없음"
+    # 보유 종목별 실시간 그라운드 트루스 (현재가/평단/수익률).
+    # LLM이 검색한 옛 뉴스에 옛 가격이 적혀 있어도 이 값을 우선하게 강제.
+    def _h_line(h):
+        cur = float(h.get("current_price") or 0)
+        avg = float(h.get("avg_price") or 0)
+        if cur > 0 and avg > 0:
+            pnl = (cur / avg - 1) * 100
+            return f"- {h['name']} ({h['ticker']}): 현재가 {cur:,.2f} · 평단 {avg:,.2f} · 수익률 {pnl:+.1f}%"
+        if cur > 0:
+            return f"- {h['name']} ({h['ticker']}): 현재가 {cur:,.2f}"
+        return f"- {h['name']} ({h['ticker']}): 가격 데이터 없음"
+
+    holdings_block = "\n".join(_h_line(h) for h in holdings) or "(보유 종목 없음)"
     macro_text = "\n".join(
         f"- {m['name']}: {m['value_str']} ({m['change_pct']:+.2f}%)"
         for m in macro if m.get("change_pct") is not None
@@ -275,8 +285,8 @@ def compose_front_page_search(
 
     prompt = f"""오늘 날짜: {datetime.now().strftime('%Y년 %m월 %d일')}
 
-[내 보유 종목]
-{holdings_line}
+[내 보유 종목 — yfinance 실시간 그라운드 트루스]
+{holdings_block}
 
 [현재 매크로 지표 (yfinance 실시간)]
 {macro_text}
@@ -290,7 +300,13 @@ def compose_front_page_search(
 추가 규칙:
 - 검색으로 확인한 사실에는 근거가 된 매체명을 본문에 자연스럽게 표기 (예: "로이터에 따르면 ...")
 - 검색 결과가 서로 충돌하면 더 최신/신뢰도 높은 쪽을 따르고 그 사실을 언급
-- 모든 종목을 다룰 필요는 없고, 오늘 실제로 움직임이 있는 종목 위주로"""
+- 모든 종목을 다룰 필요는 없고, 오늘 실제로 움직임이 있는 종목 위주로
+
+**가격 인용 규칙 (가장 중요)**:
+- 종목의 현재 주가/시가/종가를 언급할 때는 **반드시 위 [내 보유 종목] 블록의 '현재가'를 사용**.
+- 검색한 뉴스 기사에 다른 가격(예: 며칠/몇 주 전 가격, 분할 전 가격)이 나오더라도 그 가격을 본문에 적지 말 것. 사용자가 보는 진짜 현재가는 위 yfinance 값이다.
+- 목표가/저항선/지지선 같은 애널리스트 수치는 인용해도 좋지만, "현재 주가 X달러" 식으로 단언할 땐 무조건 위 그라운드 트루스를 사용.
+- 평단/수익률(있는 경우)도 위 값을 그대로 활용해 "보유자 관점"의 코멘트를 달 것."""
 
     return search_generate(
         system=_EDITOR_SYSTEM,

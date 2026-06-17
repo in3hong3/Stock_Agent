@@ -103,6 +103,24 @@ def render_tab_tracker():
     # 자동 채움 후에도 남은 가격 누락 종목 (yfinance 실패 등) — 메트릭에 ⚠️ 표시용
     missing_price = [h for h in tracked if not h.get("current_price") or float(h.get("current_price", 0) or 0) <= 0]
 
+    # 누락 종목이 있으면 사용자가 즉시 재시도 가능한 버튼 + 누락 종목 명시
+    if missing_price:
+        names = ", ".join(f"**{h.get('name') or h['ticker']}** ({h['ticker']})" for h in missing_price[:6])
+        more = f" 외 {len(missing_price) - 6}개" if len(missing_price) > 6 else ""
+        mc1, mc2 = st.columns([4, 1])
+        with mc1:
+            st.warning(
+                f"⚠️ 현재가 자동 갱신 실패: {names}{more}. "
+                f"일시적 yfinance 응답 누락일 가능성이 큽니다."
+            )
+        with mc2:
+            if st.button("🔄 다시 시도", use_container_width=True, key="retry_price_fill"):
+                # 가드 해제 → auto_fill_missing_prices가 다음 사이클에 다시 실행
+                for k in ("_auto_price_fill_done", "_auto_price_fill_done_portfolio"):
+                    st.session_state.pop(k, None)
+                st.cache_data.clear()
+                st.rerun()
+
     tickers = [it["ticker"] for it in tracked]
 
     st.subheader(f"📊 실시간 현황 — 보유 {len(tracked)}종목")
@@ -111,7 +129,11 @@ def render_tab_tracker():
     def cached_snapshot(holdings_key):
         return get_snapshot(get_portfolio_holdings())
 
-    holdings_key = tuple((h["ticker"], h["quantity"], h["avg_price"]) for h in tracked)
+    # current_price도 키에 포함 — 포트폴리오에서 가격만 갱신해도 캐시 무효화
+    holdings_key = tuple(
+        (h["ticker"], h["quantity"], h["avg_price"], h.get("current_price", 0))
+        for h in tracked
+    )
     with st.spinner("시세 조회 중..."):
         snap_df = cached_snapshot(holdings_key)
 

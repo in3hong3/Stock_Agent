@@ -5,6 +5,7 @@
 """
 import os
 import json
+import math
 import re
 from typing import Dict, List, Any
 from datetime import datetime
@@ -123,21 +124,30 @@ def remove_ticker(ticker: str):
 # 포트폴리오 연동
 # ──────────────────────────────────────────────
 def get_portfolio_holdings() -> List[Dict[str, Any]]:
-    """portfolio.csv에서 보유 종목 목록 로드: [{ticker, name, quantity, avg_price}]"""
+    """portfolio.csv에서 보유 종목 목록 로드:
+    [{ticker, name, quantity, avg_price, current_price}]
+    current_price가 비어있으면 0.0으로 반환.
+    """
     if not os.path.exists(_portfolio_csv()):
         return []
     try:
         df = pd.read_csv(_portfolio_csv())
-        return [
-            {
+        out = []
+        for _, row in df.iterrows():
+            if not str(row.get("ticker", "")).strip():
+                continue
+            try:
+                cur = float(row.get("current_price", 0) or 0)
+            except (TypeError, ValueError):
+                cur = 0.0
+            out.append({
                 "ticker": str(row["ticker"]).strip().upper(),
                 "name": str(row.get("name", row["ticker"])),
                 "quantity": float(row.get("quantity", 0) or 0),
                 "avg_price": float(row.get("avg_price", 0) or 0),
-            }
-            for _, row in df.iterrows()
-            if str(row.get("ticker", "")).strip()
-        ]
+                "current_price": cur,
+            })
+        return out
     except Exception as e:
         print(f"포트폴리오 로드 실패: {e}")
         return []
@@ -157,54 +167,86 @@ def get_usdkrw_rate() -> float:
 # ──────────────────────────────────────────────
 # 가격/지표 스냅샷
 # ──────────────────────────────────────────────
+def _fast_info_price(ticker: str) -> float:
+    """yfinance fast_info에서 lastPrice 폴백. 실패 시 0."""
+    try:
+        fi = yf.Ticker(ticker).fast_info
+        p = fi.get("lastPrice")
+        if p and not (isinstance(p, float) and math.isnan(p)) and p > 0:
+            return float(p)
+    except Exception:
+        pass
+    return 0.0
+
+
 def get_snapshot(holdings: List[Dict[str, Any]]) -> pd.DataFrame:
     """
     보유 종목별 현재가/등락/수익률/평가액/RSI 테이블.
-    holdings: [{ticker, name, quantity, avg_price}]
+    holdings: [{ticker, name, quantity, avg_price, current_price}]
+
+    **평가액/원가 계산은 사용자가 포트폴리오 탭에서 입력/저장한 current_price를
+    그라운드 트루스로 사용**. csv가 비어 있으면 yfinance history → fast_info 순으로 폴백.
     """
     rows = []
     for h in holdings:
         ticker = h["ticker"]
         qty = h.get("quantity", 0)
         avg = h.get("avg_price", 0)
-        try:
-            df = yf.Ticker(ticker).history(period="3mo")
-            if df.empty or len(df) < 15:
-                rows.append({"티커": ticker, "현재가": None, "1일": None, "5일": None,
-                             "수익률": None, "평가액": None, "RSI": None})
-                continue
+        user_price = float(h.get("current_price") or 0)
+        is_kr = ticker.endswith((".KS", ".KQ"))
 
-            close = df["Close"]
-            price = float(close.iloc[-1])
-            chg_1d = (price / close.iloc[-2] - 1) * 100 if len(close) >= 2 else 0
-            chg_5d = (price / close.iloc[-6] - 1) * 100 if len(close) >= 6 else 0
-
-            delta = close.diff()
-            gain = delta.where(delta > 0, 0).rolling(14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-            rsi = float((100 - 100 / (1 + gain / loss)).iloc[-1])
-
+        def _emit(price, chg_1d, chg_5d, rsi_val):
+            """공통 row 생성 + NaN 안전 처리."""
+            if price is None or (isinstance(price, float) and math.isnan(price)) or price <= 0:
+                rows.append({"티커": ticker, "현재가": "데이터 없음",
+                             "1일": None, "5일": None, "수익률": None, "평가액": None, "RSI": None,
+                             "_eval_native": 0.0, "_cost_native": avg * qty, "_is_kr": is_kr})
+                return
             profit_rate = (price / avg - 1) * 100 if avg > 0 else None
             eval_amount = price * qty
-
-            is_kr = ticker.endswith((".KS", ".KQ"))
             rows.append({
                 "티커": ticker,
                 "현재가": f"₩{price:,.0f}" if is_kr else f"${price:,.2f}",
-                "1일": round(chg_1d, 2),
-                "5일": round(chg_5d, 2),
+                "1일": round(chg_1d, 2) if chg_1d is not None and not math.isnan(chg_1d) else None,
+                "5일": round(chg_5d, 2) if chg_5d is not None and not math.isnan(chg_5d) else None,
                 "수익률": round(profit_rate, 2) if profit_rate is not None else None,
                 "평가액": f"₩{eval_amount:,.0f}" if is_kr else f"${eval_amount:,.2f}",
-                "RSI": round(rsi, 1),
-                "_eval_native": eval_amount,  # 합산용 (UI에서 숨김)
+                "RSI": round(rsi_val, 1) if rsi_val is not None and not math.isnan(rsi_val) else None,
+                "_eval_native": eval_amount,
                 "_cost_native": avg * qty,
                 "_is_kr": is_kr,
             })
+
+        try:
+            hist = yf.Ticker(ticker).history(period="3mo")
+            # NaN 제거 후 유효 종가만 사용
+            close = hist["Close"].dropna() if not hist.empty else hist
+            yf_price = float(close.iloc[-1]) if len(close) > 0 else 0.0
+
+            # csv current_price만 그라운드 트루스로 사용 (포트폴리오 탭과 합계 일치 보장).
+            # csv가 비어있으면 합산에서 제외하고 "데이터 없음"으로 표시.
+            display_price = user_price
+
+            # 등락률·RSI는 유효 종가가 충분히 있을 때만
+            chg_1d = chg_5d = rsi_val = None
+            if len(close) >= 2:
+                chg_1d = (yf_price / float(close.iloc[-2]) - 1) * 100
+            if len(close) >= 6:
+                chg_5d = (yf_price / float(close.iloc[-6]) - 1) * 100
+            if len(close) >= 15:
+                delta = close.diff()
+                gain = delta.where(delta > 0, 0).rolling(14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+                rsi_series = 100 - 100 / (1 + gain / loss)
+                rsi_val = float(rsi_series.dropna().iloc[-1]) if rsi_series.dropna().size else None
+
+            _emit(display_price, chg_1d, chg_5d, rsi_val)
+
         except Exception as e:
             print(f"스냅샷 실패 ({ticker}): {e}")
-            rows.append({"티커": ticker, "현재가": "오류", "1일": None, "5일": None,
-                         "수익률": None, "평가액": None, "RSI": None,
-                         "_eval_native": 0.0, "_cost_native": 0.0, "_is_kr": False})
+            fallback_price = user_price if user_price > 0 else _fast_info_price(ticker)
+            _emit(fallback_price, None, None, None)
+
     return pd.DataFrame(rows)
 
 

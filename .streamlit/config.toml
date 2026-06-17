@@ -10,3 +10,5 @@ textColor = "#E2E8F0"
 
 [server]
 headless = true
+# 소스 파일이 바뀌면 자동으로 앱을 다시 실행 (개발 편의)
+runOnSave = true
