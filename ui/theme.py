@@ -37,25 +37,32 @@ def get_cached_market_data():
         return None
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def get_realtime_market_summary():
-    """주요 지수 실시간 데이터 조회 (Dow 및 CNN 공포탐욕지수 추가)"""
+    """주요 지수 실시간 시세 조회.
+
+    - 가격은 yfinance fast_info.lastPrice (야후 웹사이트와 동일한 장중 가격)
+    - 등락률은 lastPrice vs previousClose
+    - 캐시 60초 (그 이상 늘리면 stale)
+    - CNN 공포/탐욕은 공식 그래프 API 직접 호출
+    """
     try:
         import yfinance as yf
         import requests
         import math
-        
+
+        # 나스닥은 100 지수(^NDX)로 표시 — 야후 메인 카드와 일치
         mapping = {
             "^DJI": "다우존스",
             "^GSPC": "S&P 500",
-            "^IXIC": "나스닥",
+            "^NDX": "나스닥 100",
             "^KS11": "코스피",
             "KRW=X": "원달러환율",
-            "BTC-USD": "비트코인"
+            "BTC-USD": "비트코인",
         }
-        
+
         results = []
-        
+
         # CNN 공포/탐욕 지수
         fng_data = {"종목": "공포/탐욕", "현재가": 50.0, "등락": "Neutral"}
         try:
@@ -67,32 +74,30 @@ def get_realtime_market_summary():
                 score = data['fear_and_greed']['score']
                 rating = data['fear_and_greed']['rating'].title()
                 fng_data = {"종목": "공포/탐욕", "현재가": float(score), "등락": rating}
-        except:
+        except Exception:
             pass
         results.append(fng_data)
 
-        # yfinance 지수들
         for ticker_id, name in mapping.items():
             try:
-                ticker = yf.Ticker(ticker_id)
-                hist = ticker.history(period="5d")
-                
-                val = 0.0
+                fi = yf.Ticker(ticker_id).fast_info
+                last = fi.get("lastPrice")
+                prev = fi.get("previousClose")
+
+                val = float(last) if last is not None else 0.0
                 change_str = "0.00%"
-                
-                if not hist.empty and len(hist) >= 2:
-                    val = float(hist['Close'].iloc[-1])
-                    prev = float(hist['Close'].iloc[-2])
-                    if not (math.isnan(val) or math.isnan(prev) or prev == 0):
-                        pct = ((val - prev) / prev) * 100
-                        change_str = f"{pct:+.2f}%"
-                
-                if math.isnan(val): val = 0.0
+                if (last is not None and prev is not None
+                        and not math.isnan(float(last)) and not math.isnan(float(prev))
+                        and float(prev) != 0):
+                    pct = (float(last) - float(prev)) / float(prev) * 100
+                    change_str = f"{pct:+.2f}%"
+                if math.isnan(val):
+                    val = 0.0
                 results.append({"종목": name, "현재가": val, "등락": change_str})
             except Exception as e:
                 print(f"Error fetching {ticker_id}: {e}")
                 results.append({"종목": name, "현재가": 0.0, "등락": "0.00%"})
-        
+
         return pd.DataFrame(results)
     except Exception as e:
         print(f"실시간 시장 데이터 조회 실패: {e}")

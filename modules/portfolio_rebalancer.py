@@ -407,44 +407,7 @@ class PortfolioRebalancer:
                 context += "\n### 주요 종목 전망\n"
                 for ticker, insight in market_insights.items():
                     context += f"- {insight['name']}: {insight['summary']}\n"
-            
-            # 프롬프트
-            prompt = f"""{context}
 
-**임무**: 위 포트폴리오에 대한 리밸런싱 제안을 작성하세요.
-
-**제안 항목**:
-1. **매도 추천** (손실 종목 정리, 비중 축소)
-2. **보유 유지** (현재 비중 적정)
-3. **매수 추천** (비중 확대, 신규 진입)
-4. **섹터 조정** (과도한 집중 해소)
-5. **최적화 의견** (Sharpe Ratio 개선 방향)
-
-**응답 형식**:
-- 각 항목별로 구체적 종목명과 이유 명시
-- 리밸런싱 우선순위 표시
-- 리스크 관리 방안 포함
-
-간결하고 실행 가능한 제안을 작성하세요.
-"""
-**손실 종목 비율**: {balance['risk_metrics']['losing_stocks_ratio']:.1f}%
-
-### 섹터별 비중
-"""
-            for sector, weight in balance['sector_weights'].items():
-                context += f"- {sector}: {weight:.1f}%\n"
-            
-            context += f"\n**집중도**: 상위 5개 종목이 {balance['concentration']['top_5_weight']:.1f}% 차지\n"
-            
-            if balance['concentration']['is_concentrated']:
-                context += "⚠️ 포트폴리오가 과도하게 집중되어 있습니다.\n"
-            
-            # 시장 인사이트 추가
-            if market_insights:
-                context += "\n### 주요 종목 전망\n"
-                for ticker, insight in market_insights.items():
-                    context += f"- {insight['name']}: {insight['summary']}\n"
-            
             # 프롬프트
             prompt = f"""{context}
 

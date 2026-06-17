@@ -89,8 +89,8 @@ def render_ticker_tape():
     # 7개 지수 표시 (공포탐욕, 다우, S&P500, 나스닥, 코스피, 환율, 비트코인)
     cols = st.columns(7)
     
-    indices = ["공포/탐욕", "다우존스", "S&P 500", "나스닥", "코스피", "원달러환율", "비트코인"]
-    labels = ["Fear & Greed", "DOW", "S&P 500", "NASDAQ", "KOSPI", "USD/KRW", "Bitcoin"]
+    indices = ["공포/탐욕", "다우존스", "S&P 500", "나스닥 100", "코스피", "원달러환율", "비트코인"]
+    labels = ["Fear & Greed", "DOW", "S&P 500", "NASDAQ 100", "KOSPI", "USD/KRW", "Bitcoin"]
     
     if market_df is not None and not market_df.empty:
         for i, (idx_name, label) in enumerate(zip(indices, labels)):
