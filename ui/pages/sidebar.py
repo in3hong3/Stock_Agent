@@ -2,7 +2,7 @@
 import datetime
 import streamlit as st
 
-from ui.components import render_fear_greed_gauge
+from ui.components import render_fear_greed_bar
 
 
 def render_mobile_nav(selected_tab: str = None):
@@ -30,20 +30,16 @@ def render_side_panel(fg_index, fg_status, status_text, point_color):
         st.rerun()
     st.divider()
 
-    st.subheader("🌋 시장 심리 (Fear & Greed)")
-    render_fear_greed_gauge(fg_index)
-    if fg_index is not None:
-        st.info(f"**현재 상태**: {fg_status} ({status_text})")
+    # ── 🌋 시장 심리 (컴팩트 막대) ──
+    render_fear_greed_bar(fg_index, status_text)
     st.divider()
 
-    # ── 📅 이벤트 캘린더 ──
+    # ── 📅 일정 (다가오는 일정 전면, 월별 달력은 expander로 접음) ──
     from modules.event_calendar import (
         get_all_events, build_calendar_html, get_upcoming_events,
         add_custom_event, load_custom_events, remove_custom_event,
     )
     from modules.issue_tracker import get_portfolio_holdings
-
-    st.subheader("📅 주요 일정")
 
     @st.cache_data(ttl=21600)
     def cached_events(ticker_tuple, custom_ver):
@@ -57,43 +53,47 @@ def render_side_panel(fg_index, fg_status, status_text, point_color):
         events = cached_events(tickers, custom_ver)
 
     today = datetime.date.today()
-    cal_month = st.session_state.get("cal_month", today.month)
-    cal_year = st.session_state.get("cal_year", today.year)
 
-    nav1, nav2, nav3 = st.columns([1, 3, 1])
-    with nav1:
-        if st.button("◀", key="cal_prev", use_container_width=True):
-            cal_month -= 1
-            if cal_month == 0:
-                cal_month, cal_year = 12, cal_year - 1
-            st.session_state.cal_month, st.session_state.cal_year = cal_month, cal_year
-            st.rerun()
-    with nav3:
-        if st.button("▶", key="cal_next", use_container_width=True):
-            cal_month += 1
-            if cal_month == 13:
-                cal_month, cal_year = 1, cal_year + 1
-            st.session_state.cal_month, st.session_state.cal_year = cal_month, cal_year
-            st.rerun()
-
-    st.markdown(build_calendar_html(cal_year, cal_month, events, accent=point_color), unsafe_allow_html=True)
-    st.caption("점 표시된 날짜에 마우스를 올리면 일정이 보입니다.")
-
+    st.markdown("**📅 다가오는 일정**")
     upcoming = get_upcoming_events(events, days=21)
     if upcoming:
-        st.markdown("**🔜 다가오는 일정**")
         for ev in upcoming[:8]:
             d_day = f"D-{ev['d_day']}" if ev["d_day"] > 0 else "오늘"
             st.markdown(
-                f"<div style='font-size:0.85rem; padding:3px 0;'>"
-                f"<span style='color:{point_color}; font-weight:700;'>{d_day}</span> "
-                f"<span style='color:#94A3B8;'>{ev['date'].strftime('%m/%d')}</span> "
-                f"{ev['title']}</div>",
+                f"<div style='font-size:0.85rem; padding:2px 0; display:flex; gap:8px;'>"
+                f"<span style='color:{point_color}; font-weight:700; min-width:38px;'>{d_day}</span>"
+                f"<span style='color:#94A3B8; min-width:38px;'>{ev['date'].strftime('%m/%d')}</span>"
+                f"<span>{ev['title']}</span></div>",
                 unsafe_allow_html=True,
             )
     else:
         st.caption("3주 이내 일정이 없습니다.")
 
+    # 월별 달력 (기본 접힘)
+    with st.expander("🗓️ 월별 달력 보기"):
+        cal_month = st.session_state.get("cal_month", today.month)
+        cal_year = st.session_state.get("cal_year", today.year)
+
+        nav1, nav2, nav3 = st.columns([1, 3, 1])
+        with nav1:
+            if st.button("◀", key="cal_prev", use_container_width=True):
+                cal_month -= 1
+                if cal_month == 0:
+                    cal_month, cal_year = 12, cal_year - 1
+                st.session_state.cal_month, st.session_state.cal_year = cal_month, cal_year
+                st.rerun()
+        with nav3:
+            if st.button("▶", key="cal_next", use_container_width=True):
+                cal_month += 1
+                if cal_month == 13:
+                    cal_month, cal_year = 1, cal_year + 1
+                st.session_state.cal_month, st.session_state.cal_year = cal_month, cal_year
+                st.rerun()
+
+        st.markdown(build_calendar_html(cal_year, cal_month, events, accent=point_color), unsafe_allow_html=True)
+        st.caption("점 표시된 날짜에 마우스를 올리면 일정이 보입니다.")
+
+    # 일정 직접 추가 (기본 접힘)
     with st.expander("📝 일정 직접 추가"):
         with st.form("add_event_form", clear_on_submit=True):
             ev_date = st.date_input("날짜", value=today, key="ev_date")

@@ -177,6 +177,42 @@ def render_ticker_tape():
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_fear_greed_bar(fg_value, status_text=""):
+    """Fear & Greed 컴팩트 막대 — 그라데이션 바 위에 현재 위치 마커 (높이 ~60px)."""
+    if fg_value is None:
+        st.caption("시장 심리 데이터 없음")
+        return
+
+    pos = max(0, min(100, float(fg_value)))
+    if pos <= 25:
+        val_color = "#FF4B4B"
+    elif pos <= 45:
+        val_color = "#FFA500"
+    elif pos <= 55:
+        val_color = "#FFD700"
+    elif pos <= 75:
+        val_color = "#90EE90"
+    else:
+        val_color = "#00FFA3"
+
+    st.markdown(
+        f"<div style='margin:2px 0 6px;'>"
+        f"<div style='display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;'>"
+        f"<span style='font-size:0.95rem; font-weight:700;'>🌋 시장 심리</span>"
+        f"<span style='font-size:1.15rem; font-weight:700; color:{val_color};'>{pos:.0f} "
+        f"<span style='font-size:0.75rem; color:#94A3B8; font-weight:400;'>{status_text}</span></span></div>"
+        f"<div style='position:relative; height:8px; border-radius:4px; "
+        f"background:linear-gradient(90deg,#FF4B4B,#FFA500,#FFD700,#90EE90,#00FFA3);'>"
+        f"<div style='position:absolute; left:{pos}%; top:-3px; width:3px; height:14px; "
+        f"background:#fff; border-radius:2px; transform:translateX(-50%); "
+        f"box-shadow:0 0 4px rgba(0,0,0,0.6);'></div></div>"
+        f"<div style='display:flex; justify-content:space-between; font-size:0.62rem; color:#5F5E5A; margin-top:3px;'>"
+        f"<span>공포</span><span>중립</span><span>탐욕</span></div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_fear_greed_gauge(fg_value):
     """Fear & Greed 게이지 차트 (Plotly)"""
     if fg_value is None:
