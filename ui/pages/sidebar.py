@@ -114,12 +114,3 @@ def render_side_panel(fg_index, fg_status, status_text, point_color):
                     remove_custom_event(i)
                     st.cache_data.clear()
                     st.rerun()
-
-    st.divider()
-
-    if st.button("🔄 대화 초기화", icon=":material/refresh:", use_container_width=True):
-        for key in ("rag_messages", "quant_messages", "tech_messages",
-                    "comprehensive_messages", "personalized_rag_messages"):
-            st.session_state[key] = []
-        st.success("모든 탭 대화가 초기화됐습니다.")
-        st.rerun()
