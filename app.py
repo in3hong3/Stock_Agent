@@ -32,6 +32,7 @@ from ui.pages.analysts import (
 from ui.pages.portfolio import render_tab_portfolio
 from ui.pages.alerts import render_tab_alerts
 from ui.pages.backtest import render_tab_backtest
+from ui.pages.hot_sectors import render_tab_hot_sectors
 
 
 def initialize_agents():
@@ -132,6 +133,7 @@ def main():
         tab_labels = [
             "📌 내 종목",
             "🗞️ 데일리",
+            "🔥 핫 섹터",
             "🤖 분석관",
             "💼 내 포트폴리오",
             "📒 매매일지",
@@ -142,12 +144,15 @@ def main():
             tab_labels.append("🔧 관리자")
 
         all_tabs = st.tabs(tab_labels)
-        tab_tracker, tab_paper, tab_analysts, tab_portfolio, tab_journal, tab_alerts, tab_backtest = all_tabs[:7]
+        (tab_tracker, tab_paper, tab_hot, tab_analysts, tab_portfolio,
+         tab_journal, tab_alerts, tab_backtest) = all_tabs[:8]
 
         with tab_tracker:
             render_tab_tracker()
         with tab_paper:
             render_tab_paper()
+        with tab_hot:
+            render_tab_hot_sectors()
         with tab_analysts:
             sub_rag, sub_quant, sub_tech, sub_news, sub_comp = st.tabs([
                 "🎥 영상분석 (RAG)",
@@ -175,7 +180,7 @@ def main():
         with tab_backtest:
             render_tab_backtest()
         if is_admin:
-            with all_tabs[7]:
+            with all_tabs[8]:
                 render_tab_admin()
 
 
