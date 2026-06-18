@@ -73,8 +73,35 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
     target = info.get("targetMeanPrice")
     sector = info.get("sector", "")
 
+    # 올랜도 킴식 '엔진' = 실적 성장 추세 (EPS/매출). 차트보다 먼저 보는 핵심.
+    earnings_growth = info.get("earningsGrowth")            # 연간 EPS 성장 (YoY)
+    earnings_q_growth = info.get("earningsQuarterlyGrowth")  # 분기 EPS 성장 (YoY)
+    revenue_growth = info.get("revenueGrowth")              # 매출 성장 (YoY)
+
     pts = 0
     notes = []
+
+    # 0) 실적 엔진 — EPS 성장 추세 (올랜도 킴식: 엔진이 강하면 차트 과열도 견딘다)
+    eps_g = earnings_q_growth if isinstance(earnings_q_growth, (int, float)) else earnings_growth
+    engine_strong = False
+    engine_note = ""
+    if isinstance(eps_g, (int, float)):
+        eps_pct = eps_g * 100
+        if eps_pct >= 30:
+            pts += 12; engine_strong = True
+            engine_note = f"EPS 성장 {eps_pct:+.0f}% (강력한 엔진)"
+        elif eps_pct >= 15:
+            pts += 7; engine_strong = True
+            engine_note = f"EPS 성장 {eps_pct:+.0f}% (견조한 엔진)"
+        elif eps_pct >= 0:
+            pts += 2
+            engine_note = f"EPS 성장 {eps_pct:+.0f}% (완만)"
+        else:
+            pts -= 8
+            engine_note = f"EPS 역성장 {eps_pct:+.0f}% (엔진 둔화)"
+        notes.append(engine_note)
+    if isinstance(revenue_growth, (int, float)) and revenue_growth * 100 >= 15:
+        pts += 3; notes.append(f"매출 성장 {revenue_growth*100:+.0f}%")
 
     # 1) PEG (성장 대비 밸류 — 가장 중요): 1 미만 저평가, 2 초과 고평가
     if isinstance(peg, (int, float)) and peg > 0:
@@ -131,6 +158,8 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
         "peg": round(peg, 2) if isinstance(peg, (int, float)) else None,
         "target": round(target, 2) if isinstance(target, (int, float)) else None,
         "upside": round(upside, 1) if upside is not None else None,
+        "engine_strong": engine_strong,
+        "eps_growth": round(eps_g * 100, 1) if isinstance(eps_g, (int, float)) else None,
     }
 
 
@@ -236,6 +265,13 @@ def analyze_stock(ticker: str, quantity: float = 0, avg_price: float = 0) -> Dic
     macd_cross_up = float(hist.iloc[-1]) > 0 and float(hist.iloc[-2]) <= 0   # 골든크로스 직후
     macd_cross_dn = float(hist.iloc[-1]) < 0 and float(hist.iloc[-2]) >= 0   # 데드크로스 직후
     macd_rising = float(hist.iloc[-1]) > float(hist.iloc[-3])
+    # 올랜도 킴식 MACD: 교차가 아니라 '에너지(히스토그램) 크기'를 본다.
+    # 히스토그램은 아직 양수(상승)인데 3봉 연속 줄어듦 → 추세 약화 선행 경고
+    macd_weakening = (
+        len(hist) >= 4
+        and float(hist.iloc[-1]) > 0
+        and float(hist.iloc[-1]) < float(hist.iloc[-2]) < float(hist.iloc[-3])
+    )
 
     bb_mid = float(close.rolling(20).mean().iloc[-1])
     bb_std = float(close.rolling(20).std().iloc[-1])
@@ -278,10 +314,13 @@ def analyze_stock(ticker: str, quantity: float = 0, avg_price: float = 0) -> Dic
         price=price, ma20=ma20, ma50=ma50, ma200=ma200,
         rsi=rsi, macd_hist=macd_hist, macd_cross_up=macd_cross_up,
         macd_cross_dn=macd_cross_dn, macd_rising=macd_rising,
+        macd_weakening=macd_weakening,
         bb_pos=bb_pos, bb_lower=bb_lower, vol_ratio=vol_ratio,
         adx=adx, trend_regime=trend_regime, wk_trend=wk_trend,
         bull_div=bull_div, support=support, resistance=resistance,
         chg_5d=chg_5d, high_52w=high_52w,
+        engine_strong=valuation.get("engine_strong", False),
+        eps_growth=valuation.get("eps_growth"),
     )
 
     return {
@@ -310,6 +349,9 @@ def _identify_setup(**k) -> tuple:
     vol_ratio, bull_div = k["vol_ratio"], k["bull_div"]
     resistance, support, high_52w = k["resistance"], k["support"], k["high_52w"]
     chg_5d = k["chg_5d"]
+    engine_strong = k.get("engine_strong", False)   # EPS 성장 강함 (올랜도 킴식 '엔진')
+    eps_growth = k.get("eps_growth")
+    macd_weakening = k.get("macd_weakening", False)
 
     score = 0
     reasons = []
@@ -349,13 +391,25 @@ def _identify_setup(**k) -> tuple:
             score += 8; reasons.append(("✅", "52주 신고가 근접 — 매물벽 적음(저항 희박)"))
 
     # ───── 매도/청산 셋업 ─────
-    # D. 과열 청산: RSI>72 + 볼린저 상단
+    # D. 과열 구간: RSI>72 + 볼린저 상단
+    #    올랜도 킴식 예외 — 펀더(EPS 성장)가 강하고 주봉 상승이면 '과매수=매도'가 아니라
+    #    '강세 모멘텀'으로 보고 보유. 엔진이 약하거나 추세 꺾이면 그제야 익절.
     elif rsi >= 72 and bb_pos >= 88:
-        setup = "🔴 과열 — 분할 익절"
-        score = -32
-        reasons.append(("⛔", f"RSI {rsi:.0f} 과매수 + 볼린저 상단({bb_pos:.0f}%) — 단기 과열, 되돌림 리스크"))
-        if k["macd_cross_dn"]:
-            score -= 10; reasons.append(("⛔", "MACD 데드크로스 — 모멘텀 둔화 확인"))
+        eps_str = f" (EPS {eps_growth:+.0f}%)" if isinstance(eps_growth, (int, float)) else ""
+        if engine_strong and wk_trend == "상승" and not macd_weakening:
+            setup = "🔥 강세 모멘텀 (펀더 주도)"
+            score = 18
+            reasons.append(("✅", f"RSI {rsi:.0f} 과매수지만 실적 엔진 강함{eps_str} + 주봉 상승 — "
+                                  f"과열을 '강세 신호'로 해석, 추세 추종 보유 (올랜도 킴식)"))
+            reasons.append(("•", "엔진이 식거나(EPS 둔화) MACD 히스토그램 꺾이면 즉시 익절 전환"))
+        else:
+            setup = "🔴 과열 — 분할 익절"
+            score = -32
+            reasons.append(("⛔", f"RSI {rsi:.0f} 과매수 + 볼린저 상단({bb_pos:.0f}%) — 단기 과열, 되돌림 리스크"))
+            if not engine_strong:
+                reasons.append(("⛔", f"실적 엔진 약함{eps_str} — 펀더 뒷받침 없는 과열이라 되돌림 가능성 큼"))
+            if k["macd_cross_dn"]:
+                score -= 10; reasons.append(("⛔", "MACD 데드크로스 — 모멘텀 둔화 확인"))
 
     # E. 추세 이탈: MA50 하향 이탈 + 데드크로스
     elif price < ma50 and (k["macd_cross_dn"] or k["macd_hist"] < 0) and wk_trend != "상승":
@@ -375,6 +429,12 @@ def _identify_setup(**k) -> tuple:
             score -= 5; reasons.append(("•", f"MA50 아래, 방향성 불명확 (RSI {rsi:.0f}, ADX {adx:.0f})"))
         if trend_regime == "횡보장":
             reasons.append(("•", f"ADX {adx:.0f} 횡보장 — 박스권 매매 외 신규 진입 자제"))
+
+    # ── 공통: MACD 히스토그램 다이버전스 (올랜도 킴식 선제 경고) ──
+    # 주가는 오르는데(또는 보합) 히스토그램 에너지가 줄어듦 → 추세 약화 예고
+    if macd_weakening and chg_5d >= -1 and "익절" not in setup:
+        reasons.append(("⚠️", "MACD 히스토그램 3봉 연속 축소 — 주가는 버티나 상승 에너지 약화. "
+                              "실적 발표·이벤트 전후 변동성 주의, 신규 추격매수는 보류"))
 
     return setup, score, reasons
 
