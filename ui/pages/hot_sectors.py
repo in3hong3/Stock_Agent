@@ -84,7 +84,19 @@ def render_tab_hot_sectors():
     st.dataframe(styled, hide_index=True, use_container_width=True)
     st.caption("vs벤치 = SPY 대비 1개월 초과수익 · 빨강 상승 / 파랑 하락")
 
-    # ── AI 해설 (버튼 클릭 시에만 — 토큰 비용) ──
+    # AI 영역은 fragment — 슬라이더/입력/버튼 조작 시 이 박스만 갱신 (전체 페이지 rerun 방지)
+    _ai_explain_fragment(scan)
+    _stock_score_fragment(hot)
+
+    st.caption("⚠️ ETF 모멘텀·AI 스코어링은 분석 참고자료이며 미래 수익을 보장하지 않습니다. 투자 권유가 아닙니다.")
+
+
+@st.fragment
+def _ai_explain_fragment(scan):
+    """AI 섹터 해설 — 슬라이더/버튼 조작이 이 fragment 내부에서만 rerun."""
+    from modules.sector_scanner import explain_hot_sectors
+    from modules.issue_tracker import get_portfolio_holdings
+
     st.markdown("---")
     st.subheader("🤖 AI 섹터 해설")
     st.caption("상위 섹터가 '왜 지금 강한지'를 최신 뉴스 기반으로 분석합니다. (LLM 웹검색 — 토큰 비용 발생)")
@@ -116,13 +128,18 @@ def render_tab_hot_sectors():
     if st.session_state.get("hot_sector_explain"):
         st.markdown(st.session_state["hot_sector_explain"])
 
-    # ── 🏆 종목 스코어링 (월스트리트 100점) ──
+
+@st.fragment
+def _stock_score_fragment(hot):
+    """종목 스코어링 — 입력/버튼 조작이 이 fragment 내부에서만 rerun."""
+    from modules.sector_scanner import score_stocks
+    from modules.issue_tracker import get_portfolio_holdings
+
     st.markdown("---")
     st.subheader("🏆 종목 스코어링 (월스트리트 100점)")
     st.caption("섹터/테마를 입력하면 그 안에서 8-10곳을 발굴해 랭킹, 티커를 나열하면 그 종목들만 점수화합니다. "
                "밸류에이션(30) + 미래 성장 모멘텀(40) + 경제적 해자(30). (LLM 웹검색 — 토큰 비용)")
 
-    # 핫 섹터 순위에서 바로 가져오기 편하도록 상위 섹터명 제시
     hot_names = " · ".join(r["name"].split(" (")[0] for r in hot[:5])
     st.caption(f"💡 지금 핫한 섹터: {hot_names}")
 
@@ -159,5 +176,3 @@ def render_tab_hot_sectors():
 
     if st.session_state.get("stock_score_result"):
         st.markdown(st.session_state["stock_score_result"])
-
-    st.caption("⚠️ ETF 모멘텀·AI 스코어링은 분석 참고자료이며 미래 수익을 보장하지 않습니다. 투자 권유가 아닙니다.")

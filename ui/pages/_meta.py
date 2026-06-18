@@ -56,10 +56,11 @@ def resolve_stance() -> str:
     return "aggressive"
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=900)
 def get_cached_signals(holdings_key, stance, seed, risk):
     """매매 시그널 캐시 — 사이드/트래커가 같은 결과를 공유 (중복 계산 방지).
     holdings_key는 캐시 무효화용 (ticker/qty/avg/current_price 튜플).
+    ttl 15분 — 탭 전환·조작마다 yfinance 재계산 방지 (시그널은 분 단위 신선도 불필요).
     """
     from modules.trade_signal import generate_signals
     from modules.issue_tracker import get_portfolio_holdings
