@@ -3,7 +3,7 @@ import streamlit as st
 
 
 def render_tab_hot_sectors():
-    from modules.sector_scanner import scan_sectors, explain_hot_sectors
+    from modules.sector_scanner import scan_sectors, explain_hot_sectors, score_stocks
     from modules.issue_tracker import get_portfolio_holdings
 
     st.header("🔥 AI 핫 섹터 조사")
@@ -116,4 +116,48 @@ def render_tab_hot_sectors():
     if st.session_state.get("hot_sector_explain"):
         st.markdown(st.session_state["hot_sector_explain"])
 
-    st.caption("⚠️ ETF 모멘텀은 과거 데이터 기반이며 미래 수익을 보장하지 않습니다. 투자 권유가 아닙니다.")
+    # ── 🏆 종목 스코어링 (월스트리트 100점) ──
+    st.markdown("---")
+    st.subheader("🏆 종목 스코어링 (월스트리트 100점)")
+    st.caption("섹터/테마를 입력하면 그 안에서 8-10곳을 발굴해 랭킹, 티커를 나열하면 그 종목들만 점수화합니다. "
+               "밸류에이션(30) + 미래 성장 모멘텀(40) + 경제적 해자(30). (LLM 웹검색 — 토큰 비용)")
+
+    # 핫 섹터 순위에서 바로 가져오기 편하도록 상위 섹터명 제시
+    hot_names = " · ".join(r["name"].split(" (")[0] for r in hot[:5])
+    st.caption(f"💡 지금 핫한 섹터: {hot_names}")
+
+    sc1, sc2 = st.columns([4, 1])
+    with sc1:
+        score_query = st.text_input(
+            "섹터/테마 또는 티커",
+            placeholder="예: 원전  /  방산  /  NVDA TSLA AVGO",
+            key="score_query",
+            label_visibility="collapsed",
+        )
+    with sc2:
+        score_clicked = st.button("🏆 스코어링", type="primary", use_container_width=True)
+
+    if score_clicked:
+        if not score_query.strip():
+            st.warning("섹터명 또는 티커를 입력하세요.")
+        else:
+            from utils.web_llm import get_search_provider
+            if not get_search_provider():
+                st.error("⚠️ 검색 LLM 키가 없습니다. .env에 PERPLEXITY_API_KEY / GEMINI_API_KEY 중 하나를 설정하세요.")
+            else:
+                from utils.loading import ProgressBanner
+                try:
+                    with ProgressBanner(title=f"'{score_query}' 종목 스코어링 중", total=2, icon="🏆") as banner:
+                        banner.step("📰 수주·계약·밸류에이션 데이터 검색 중...")
+                        banner.step("✍️ 100점 랭킹 분석 작성 중... (20~40초)")
+                        holdings = get_portfolio_holdings()
+                        result = score_stocks(score_query.strip(), holdings=holdings)
+                        banner.done("✅ 스코어링 완료!")
+                    st.session_state["stock_score_result"] = result
+                except Exception as e:
+                    st.error(f"❌ 스코어링 실패: {e}")
+
+    if st.session_state.get("stock_score_result"):
+        st.markdown(st.session_state["stock_score_result"])
+
+    st.caption("⚠️ ETF 모멘텀·AI 스코어링은 분석 참고자료이며 미래 수익을 보장하지 않습니다. 투자 권유가 아닙니다.")
