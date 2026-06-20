@@ -114,6 +114,28 @@ def main():
         }}
         [data-testid="stChatMessageAvatarAssistant"] + div div {{ color: {point_color} !important; }}
         .main .block-container {{ padding-top: 4rem !important; }}
+
+        /* ── 로딩(rerun) 인디케이터 강조 — 우상단에 크고 눈에 띄게 ── */
+        [data-testid="stStatusWidget"] {{
+            background: {point_color} !important;
+            border-radius: 999px !important;
+            padding: 6px 16px !important;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.45) !important;
+            transform: scale(1.2);
+            transform-origin: top right;
+            font-size: 0 !important;            /* 영어 'Running...' 텍스트 숨김 (svg 아이콘은 유지) */
+            display: inline-flex !important;
+            align-items: center !important;
+        }}
+        [data-testid="stStatusWidget"]::after {{
+            content: "로딩 중...";
+            font-size: 13px !important;
+            font-weight: 700;
+            color: {point_text_color} !important;
+            margin-left: 6px;
+            white-space: nowrap;
+        }}
+        [data-testid="stStatusWidget"] svg {{ fill: {point_text_color} !important; }}
     </style>
     """, unsafe_allow_html=True)
 
