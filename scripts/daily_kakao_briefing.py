@@ -29,7 +29,7 @@ except ImportError:
 os.environ.setdefault("STOCK_AGENT_USER", "admin")
 
 LINK = "http://161.33.6.231/"
-LIMIT = 1900  # 카카오 텍스트 메모 안전 길이
+LIMIT = 3500  # 카카오 텍스트 메모 길이 (2000자+ 발송 확인됨)
 
 
 def _strip_md(text: str) -> str:
@@ -88,7 +88,13 @@ def build_briefing() -> str:
         paper = get_saved_paper()
         front = paper.get("front", "")
         if front:
+            # 검색 출처(URL 목록) 섹션 이후는 잘라냄 — 카카오엔 불필요
+            import re as _re
+            front = _re.split(r"\n#{0,6}\s*📎?\s*검색 출처", front)[0]
+            front = _re.split(r"\n-{3,}\s*\n\s*\*?\*?📎", front)[0]
             clean = _strip_md(front)
+            # 본문 내 인용 표시 [1][2] 제거 (출처 뺐으므로 의미 없음)
+            clean = _re.sub(r"\[\d+\](\[\d+\])*", "", clean)
             parts.append("\n🗞️ 시황 브리핑\n" + clean)
         else:
             parts.append("\n🗞️ 시황 브리핑\n• 오늘 신문이 아직 발행 전입니다. 앱에서 발행하세요.")
