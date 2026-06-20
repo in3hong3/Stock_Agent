@@ -37,9 +37,10 @@ def _fmt_won(v):
 
 
 def build_briefing() -> str:
-    from modules.issue_tracker import get_portfolio_holdings, get_usdkrw_rate, fetch_ticker_news
+    from modules.issue_tracker import get_portfolio_holdings, get_usdkrw_rate
     from modules.market_overview import get_macro_data
     from modules.trade_signal import generate_signals
+    from modules.daily_paper import fetch_google_news
 
     today = datetime.now().strftime("%m/%d (%a)")
     parts = [f"📊 Stock Agent 데일리 · {today}"]
@@ -98,13 +99,18 @@ def build_briefing() -> str:
     except Exception as e:
         print(f"시그널 실패: {e}")
 
-    # ── 보유종목 주요 뉴스 헤드라인 ──
+    # ── 보유종목 주요 뉴스 헤드라인 (한글 구글뉴스) ──
     try:
         news_lines = []
         for h in holdings[:4]:
-            items = fetch_ticker_news(h["ticker"], max_news=1)
+            name = h.get("name", "") or h["ticker"]
+            # 한글 종목명이 있으면 그걸로, 영문명뿐이면 티커로 한글 뉴스 검색
+            query = name if not str(name).isascii() else h["ticker"]
+            items = fetch_google_news(query, max_items=1, lang="ko")
             if items:
-                title = items[0]["title"][:42]
+                title = items[0]["title"]
+                # 구글뉴스 제목 끝의 ' - 매체명' 제거 후 길이 컷
+                title = title.rsplit(" - ", 1)[0][:40]
                 news_lines.append(f"• [{h['ticker']}] {title}")
             if len(news_lines) >= 4:
                 break
