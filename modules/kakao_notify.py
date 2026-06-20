@@ -48,11 +48,15 @@ def _refresh_access_token() -> Optional[str]:
         return None
 
     try:
-        r = requests.post(_TOKEN_URL, data={
+        token_data = {
             "grant_type": "refresh_token",
             "client_id": rest_key,
             "refresh_token": refresh_token,
-        }, timeout=10)
+        }
+        client_secret = os.getenv("KAKAO_CLIENT_SECRET")
+        if client_secret:
+            token_data["client_secret"] = client_secret
+        r = requests.post(_TOKEN_URL, data=token_data, timeout=10)
         r.raise_for_status()
         data = r.json()
     except Exception as e:

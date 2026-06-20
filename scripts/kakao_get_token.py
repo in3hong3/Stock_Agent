@@ -22,6 +22,13 @@ from urllib.parse import urlparse, parse_qs
 
 import requests
 
+# .env 로드 (KAKAO_REST_API_KEY / KAKAO_CLIENT_SECRET 읽기)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+except ImportError:
+    pass
+
 REDIRECT_URI = "http://localhost:8000/oauth"
 _auth_code = {}
 
@@ -66,13 +73,17 @@ def main():
     code = _auth_code["code"]
     print(f"인가 코드 수신 완료.")
 
-    # 3) 코드 → 토큰 교환
-    r = requests.post("https://kauth.kakao.com/oauth/token", data={
+    # 3) 코드 → 토큰 교환 (Client Secret 활성화 시 함께 전송)
+    token_data = {
         "grant_type": "authorization_code",
         "client_id": rest_key,
         "redirect_uri": REDIRECT_URI,
         "code": code,
-    }, timeout=10)
+    }
+    client_secret = os.getenv("KAKAO_CLIENT_SECRET")
+    if client_secret:
+        token_data["client_secret"] = client_secret
+    r = requests.post("https://kauth.kakao.com/oauth/token", data=token_data, timeout=10)
     data = r.json()
     if "refresh_token" not in data:
         print(f"❌ 토큰 발급 실패: {data}")
@@ -83,6 +94,8 @@ def main():
     print("=" * 60)
     print(f"KAKAO_REST_API_KEY={rest_key}")
     print(f"KAKAO_REFRESH_TOKEN={data['refresh_token']}")
+    if client_secret:
+        print(f"KAKAO_CLIENT_SECRET={client_secret}")
     print("=" * 60)
     print(f"\n(access token은 앱이 자동 갱신합니다. refresh token은 보통 2개월 유지)")
 
