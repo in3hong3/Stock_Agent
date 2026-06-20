@@ -182,7 +182,21 @@ def send_alert_email(triggered: List[Dict[str, Any]]) -> bool:
 
 
 def run_alert_check() -> Dict[str, Any]:
-    """cron 진입점: 체크 → 발송. 결과 요약 반환."""
+    """cron 진입점: 체크 → 발송(이메일 + 카카오톡). 결과 요약 반환."""
     triggered = check_alerts()
     sent = send_alert_email(triggered) if triggered else False
-    return {"triggered_count": len(triggered), "email_sent": sent, "triggered": triggered}
+
+    # 카카오톡 '나에게 보내기' (설정돼 있으면 함께 발송)
+    kakao_sent = False
+    if triggered:
+        try:
+            from modules.kakao_notify import send_alert_kakao, is_configured
+            if is_configured():
+                kakao_sent = send_alert_kakao(triggered, CONDITION_TYPES)
+        except Exception as e:
+            print(f"카카오 알림 발송 실패: {e}")
+
+    return {
+        "triggered_count": len(triggered), "email_sent": sent,
+        "kakao_sent": kakao_sent, "triggered": triggered,
+    }
