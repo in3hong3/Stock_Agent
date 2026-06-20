@@ -126,7 +126,10 @@ def main():
             font-size: 0 !important;            /* 영어 'Running...' 텍스트 숨김 (svg 아이콘은 유지) */
             display: inline-flex !important;
             align-items: center !important;
+            pointer-events: none !important;    /* 실수로 Stop(실행 중단) 눌리는 것 방지 */
+            cursor: default !important;
         }}
+        [data-testid="stStatusWidget"] * {{ pointer-events: none !important; }}
         [data-testid="stStatusWidget"]::after {{
             content: "로딩 중...";
             font-size: 13px !important;
