@@ -29,101 +29,77 @@ except ImportError:
 os.environ.setdefault("STOCK_AGENT_USER", "admin")
 
 LINK = "http://161.33.6.231/"
-LIMIT = 980  # 카카오 텍스트 메모 안전 길이
+LIMIT = 1900  # 카카오 텍스트 메모 안전 길이
 
 
-def _fmt_won(v):
-    return f"₩{v:,.0f}"
+def _strip_md(text: str) -> str:
+    """마크다운을 카카오톡 평문으로 정리."""
+    import re
+    lines = []
+    for ln in text.splitlines():
+        s = ln.rstrip()
+        if s.strip() in ("---", "***", "___"):
+            continue
+        # 헤더(##) → 굵게 표시 대신 그냥 텍스트 (앞에 ▸)
+        s = re.sub(r"^\s*#{1,6}\s*", "▸ ", s)
+        # 볼드/이탤릭 마크 제거
+        s = s.replace("**", "").replace("__", "")
+        s = re.sub(r"\*(.+?)\*", r"\1", s)
+        # 링크 [텍스트](url) → 텍스트
+        s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
+        # 표 구분선 제거
+        if re.match(r"^\s*\|?\s*:?-{2,}", s):
+            continue
+        lines.append(s)
+    out = "\n".join(lines)
+    # 연속 빈 줄 압축
+    import re as _re
+    return _re.sub(r"\n{3,}", "\n\n", out).strip()
 
 
 def build_briefing() -> str:
-    from modules.issue_tracker import get_portfolio_holdings, get_usdkrw_rate
-    from modules.market_overview import get_macro_data
-    from modules.trade_signal import generate_signals
-    from modules.daily_paper import fetch_google_news
+    from modules.issue_tracker import get_portfolio_holdings
+    from modules.event_calendar import get_all_events, get_upcoming_events
+    from modules.daily_paper import get_saved_paper
 
     today = datetime.now().strftime("%m/%d (%a)")
     parts = [f"📊 Stock Agent 데일리 · {today}"]
 
     holdings = get_portfolio_holdings()
-    fx = get_usdkrw_rate() or 1400.0
+    tickers = [h["ticker"] for h in holdings]
 
-    # ── 시장(매크로) 한 줄 ──
+    # ── 📅 오늘/이번주 일정 (오늘 무슨 일이 있을까) ──
     try:
-        macro = get_macro_data()
-        pick = {m["name"].split(" ")[-1].strip("()"): m for m in macro}
-        wanted = ["S&P", "나스닥", "VIX", "원/달러"]
-        seg = []
-        for m in macro:
-            nm = m["name"]
-            if any(w in nm for w in ["S&P 500", "나스닥", "VIX", "원/달러"]) and m.get("change_pct") is not None:
-                short = nm.split(" ", 1)[-1] if " " in nm else nm
-                seg.append(f"{short} {m['change_pct']:+.1f}%")
-            if len(seg) >= 4:
-                break
-        if seg:
-            parts.append("\n🌍 시장\n" + " · ".join(seg))
+        events = get_all_events(tickers)
+        upcoming = get_upcoming_events(events, days=14)
+        if upcoming:
+            lines = []
+            for ev in upcoming[:6]:
+                d_day = "오늘" if ev["d_day"] == 0 else f"D-{ev['d_day']}"
+                lines.append(f"• {d_day} ({ev['date'].strftime('%m/%d')}) {ev['title']}")
+            parts.append("\n📅 다가오는 일정\n" + "\n".join(lines))
+        else:
+            parts.append("\n📅 다가오는 일정\n• 2주 내 예정된 주요 일정 없음")
     except Exception as e:
-        print(f"매크로 실패: {e}")
+        print(f"일정 실패: {e}")
 
-    # ── 내 자산 ──
+    # ── 🗞️ 시황 브리핑 (어제~오늘 무슨 일이 있었나 — 데일리 신문 그대로) ──
     try:
-        stock_eval = stock_cost = 0.0
-        for h in holdings:
-            qty = float(h.get("quantity", 0) or 0)
-            cur = float(h.get("current_price", 0) or 0)
-            avg = float(h.get("avg_price", 0) or 0)
-            is_kr = str(h["ticker"]).endswith((".KS", ".KQ"))
-            factor = 1.0 if is_kr else fx
-            stock_eval += qty * cur * factor
-            stock_cost += qty * avg * factor
-        pnl = stock_eval - stock_cost
-        pnl_rate = (pnl / stock_cost * 100) if stock_cost > 0 else 0
-        if stock_eval > 0:
-            parts.append(f"\n💰 내 주식 {_fmt_won(stock_eval)} (평가손익 {pnl_rate:+.1f}%)")
+        paper = get_saved_paper()
+        front = paper.get("front", "")
+        if front:
+            clean = _strip_md(front)
+            parts.append("\n🗞️ 시황 브리핑\n" + clean)
+        else:
+            parts.append("\n🗞️ 시황 브리핑\n• 오늘 신문이 아직 발행 전입니다. 앱에서 발행하세요.")
     except Exception as e:
-        print(f"자산 실패: {e}")
+        print(f"시황 실패: {e}")
 
-    # ── 오늘 할 일 (매매 시그널 — 액션 있는 것 우선) ──
-    try:
-        result = generate_signals(holdings, "expert", 0, 1.0)
-        actionable = [s for s in result["signals"] if s.get("action") not in ("관망",)]
-        actionable = actionable or result["signals"]
-        lines = []
-        for s in actionable[:5]:
-            pr = s.get("profit_rate")
-            pr_s = f" {pr:+.0f}%" if pr is not None else ""
-            lines.append(f"{s['icon']} {s['ticker']} {s['action']}{pr_s}")
-        if lines:
-            parts.append("\n🎯 오늘 할 일\n" + "\n".join(lines))
-    except Exception as e:
-        print(f"시그널 실패: {e}")
-
-    # ── 보유종목 주요 뉴스 헤드라인 (한글 구글뉴스) ──
-    try:
-        news_lines = []
-        for h in holdings[:4]:
-            name = h.get("name", "") or h["ticker"]
-            # 한글 종목명이 있으면 그걸로, 영문명뿐이면 티커로 한글 뉴스 검색
-            query = name if not str(name).isascii() else h["ticker"]
-            items = fetch_google_news(query, max_items=1, lang="ko")
-            if items:
-                title = items[0]["title"]
-                # 구글뉴스 제목 끝의 ' - 매체명' 제거 후 길이 컷
-                title = title.rsplit(" - ", 1)[0][:40]
-                news_lines.append(f"• [{h['ticker']}] {title}")
-            if len(news_lines) >= 4:
-                break
-        if news_lines:
-            parts.append("\n📰 주요 뉴스\n" + "\n".join(news_lines))
-    except Exception as e:
-        print(f"뉴스 실패: {e}")
-
-    parts.append(f"\n전체 보기 → {LINK}")
+    parts.append(f"\n📲 전체 보기 → {LINK}")
 
     text = "\n".join(parts)
     if len(text) > LIMIT:
-        text = text[:LIMIT - 20].rstrip() + f"\n…전체 → {LINK}"
+        text = text[:LIMIT - 25].rstrip() + f"\n…\n📲 전체 → {LINK}"
     return text
 
 
