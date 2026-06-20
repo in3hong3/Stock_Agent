@@ -26,13 +26,18 @@ PRIVATE_FILES = [
 
 
 def current_user() -> str:
-    """현재 로그인한 사용자 ID. 미로그인 시 'default' (안전망)."""
+    """현재 로그인한 사용자 ID.
+    우선순위: streamlit 세션 > 환경변수 STOCK_AGENT_USER > 'default'.
+    (cron/스크립트는 세션이 없으므로 STOCK_AGENT_USER로 대상 사용자 지정)
+    """
     try:
         import streamlit as st
         uid = st.session_state.get("user_id")
-        return uid if uid else "default"
+        if uid:
+            return uid
     except Exception:
-        return "default"
+        pass
+    return os.getenv("STOCK_AGENT_USER", "default")
 
 
 def user_dir(user_id: str = None) -> str:
