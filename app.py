@@ -27,7 +27,7 @@ from ui.pages.journal import render_tab_journal
 from ui.pages.admin import render_tab_admin
 from ui.pages.analysts import (
     render_tab_rag, render_tab_quant, render_tab_tech,
-    render_tab_news, render_tab_comprehensive,
+    render_tab_news, render_tab_comprehensive, render_tab_entry_check,
 )
 from ui.pages.portfolio import render_tab_portfolio
 from ui.pages.alerts import render_tab_alerts
@@ -179,13 +179,16 @@ def main():
         with tab_hot:
             render_tab_hot_sectors()
         with tab_analysts:
-            sub_rag, sub_quant, sub_tech, sub_news, sub_comp = st.tabs([
+            sub_entry, sub_rag, sub_quant, sub_tech, sub_news, sub_comp = st.tabs([
+                "🎯 진입 점검",
                 "🎥 영상분석 (RAG)",
                 "📊 밸류에이션",
                 "📈 기술분석 (차트)",
                 "📰 뉴스분석",
                 "🔀 종합분석",
             ])
+            with sub_entry:
+                render_tab_entry_check()
             with sub_rag:
                 render_tab_rag()
             with sub_quant:

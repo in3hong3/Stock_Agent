@@ -340,3 +340,120 @@ def render_tab_comprehensive():
                     render_chat_sources(message["sources"])
     else:
         st.info("👆 위에서 체크박스를 선택하고 질문을 입력하세요!")
+
+
+def render_tab_entry_check():
+    """🎯 진입 점검 — '이 종목 지금 사도 될까?'를 시그널 엔진으로 종합 판단."""
+    st.header("🎯 진입 점검 — 지금 사도 될까?")
+    st.caption("매수 전에 물어보세요. 진입 타이밍·밸류에이션·실적 엔진을 종합해 "
+               "'지금 진입 / 조정 대기 / 비추천'을 판단합니다. (규칙 기반·무료)")
+
+    from modules.portfolio_advisor import PERSONAS
+
+    ec1, ec2, ec3 = st.columns([2, 2, 1.3])
+    with ec1:
+        ticker = st.text_input("티커 또는 종목명", value="", placeholder="예: NVDA, 엔비디아, 005930",
+                               key="entry_ticker")
+    with ec2:
+        stance_label = st.selectbox("투자 성향", [v["label"] for v in PERSONAS.values()],
+                                    index=3, key="entry_stance")  # 기본 전문가
+        stance = next(k for k, v in PERSONAS.items() if v["label"] == stance_label)
+    with ec3:
+        st.write("")
+        go = st.button("🔍 점검", type="primary", use_container_width=True)
+
+    if not go:
+        st.info("👆 사려는 종목을 입력하고 점검을 눌러보세요.")
+        return
+
+    if not ticker.strip():
+        st.warning("종목을 입력하세요.")
+        return
+
+    from modules.issue_tracker import resolve_ticker
+    from modules.trade_signal import get_market_regime, analyze_stock, decide_action, _PROFILE
+
+    tk = resolve_ticker(ticker.strip())
+
+    @st.cache_data(ttl=300)
+    def _entry_analyze(tk_, stance_):
+        regime = get_market_regime()
+        analysis = analyze_stock(tk_, 0, 0)  # 신규 진입 관점 (미보유)
+        if "error" in analysis:
+            return {"error": analysis["error"], "regime": regime}
+        decision = decide_action(analysis, stance_, regime["score_modifier"])
+        return {"regime": regime, **analysis, **decision}
+
+    with st.spinner(f"{tk} 분석 중... (시세·지표·밸류에이션)"):
+        r = _entry_analyze(tk, stance)
+
+    if r.get("error"):
+        st.error(f"❌ {tk}: {r['error']} — 티커를 확인하세요.")
+        return
+
+    buy_th, strong_th, sell_th = _PROFILE.get(stance, _PROFILE["neutral"])[:3]
+    score = r["adj_score"]
+
+    # ── 결론 카드 ──
+    if score >= strong_th:
+        verdict, vcolor, vicon = "지금 진입 가능 (적극)", "#00FFA3", "🟢🟢"
+    elif score >= buy_th:
+        verdict, vcolor, vicon = "분할 진입 고려", "#1D9E75", "🟢"
+    elif score <= sell_th:
+        verdict, vcolor, vicon = "진입 비추천 — 지금은 피하기", "#FF4B4B", "🔴"
+    else:
+        verdict, vcolor, vicon = "관망 — 더 좋은 자리 대기", "#FFD700", "⚪"
+
+    val = r.get("valuation", {})
+    st.markdown(
+        f"<div style='background:linear-gradient(160deg,#16202A,#16181F); "
+        f"border:1px solid {vcolor}55; border-radius:14px; padding:18px 20px; margin:6px 0 14px;'>"
+        f"<div style='font-size:0.8rem; color:#94A3B8;'>{tk} · {PERSONAS[stance]['label']} 관점 · "
+        f"시장국면 {r['regime']['label']}</div>"
+        f"<div style='font-size:1.5rem; font-weight:700; color:{vcolor}; margin:6px 0;'>{vicon} {verdict}</div>"
+        f"<div style='font-size:0.85rem; color:#94A3B8;'>종합 점수 {score:+.0f} · 셋업: {r.get('setup','')}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── 3대 관점 ──
+    c1, c2, c3 = st.columns(3)
+    c1.metric("📈 타이밍", f"RSI {r.get('rsi','?')}",
+              help=f"MACD {r.get('macd_hist','?'):.2f} · ADX {r.get('adx','?')} {r.get('trend_regime','')} · 주봉 {r.get('wk_trend','')}추세")
+    vmap = {"저평가": "🟢 저평가", "적정": "🟡 적정", "고평가": "🔴 고평가", "평가불가": "⚪ 평가불가"}
+    c2.metric("🏷️ 밸류에이션", vmap.get(val.get("verdict", "평가불가"), "?"),
+              help=val.get("note", ""))
+    eps = val.get("eps_growth")
+    c3.metric("⚙️ 실적 엔진", f"EPS {eps:+.0f}%" if isinstance(eps, (int, float)) else "데이터 없음",
+              help="EPS 성장 추세 — 강하면 과열에도 추세 유지 가능 (올랜도 킴식)")
+
+    # ── 진입 플랜 ──
+    if r.get("entry"):
+        st.markdown("#### 🎯 진입 플랜")
+        pc1, pc2, pc3, pc4 = st.columns(4)
+        pc1.metric("진입가", f"{r['entry']:,.2f}")
+        pc2.metric("손절가", f"{r['stop']:,.2f}", delta=f"{(r['stop']/r['entry']-1)*100:+.1f}%")
+        pc3.metric("목표가", f"{r['target']:,.2f}", delta=f"{(r['target']/r['entry']-1)*100:+.1f}%")
+        pc4.metric("손익비", f"1 : {r['rr']}")
+    else:
+        st.info(f"💡 {r.get('plan','명확한 진입 트리거가 없어 관망 구간입니다.')}")
+
+    # ── 판단 근거 ──
+    with st.expander("📋 판단 근거 상세", expanded=True):
+        for pts, reason in r.get("reasons", []):
+            st.markdown(f"- {pts} {reason}")
+        for ex in r.get("extra", []):
+            st.markdown(f"- {ex}")
+        st.caption(f"지지 {r.get('support','?')} · 저항 {r.get('resistance','?')} · "
+                   f"MA50 {r.get('ma50','?')} · MA200 {r.get('ma200','?')} · "
+                   f"현재가 {r.get('price','?')}")
+
+    # ── 차트 ──
+    if st.toggle("📈 차트 보기 (캔들+MA+볼린저+RSI+MACD)", key="entry_chart"):
+        from utils.chart_builder import build_candlestick_chart
+        with st.spinner("차트 로딩..."):
+            fig = build_candlestick_chart(tk, "6mo")
+            if fig:
+                st.plotly_chart(fig, use_container_width=True, key="entry_fig")
+
+    st.caption("⚠️ 규칙 기반 기술·밸류 종합 신호입니다. 최신 뉴스·이벤트는 별도 확인하세요. 투자 권유가 아닙니다.")
