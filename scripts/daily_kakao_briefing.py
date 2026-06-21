@@ -111,6 +111,13 @@ def build_briefing() -> str:
 
 def main():
     from modules.kakao_notify import is_configured, send_kakao_memo
+    from ui.pages._meta import load_meta
+
+    # 이 계정이 '브리핑 받기'를 켰는지 확인 (가격 알림 탭의 토글)
+    if not load_meta().get("kakao_briefing_enabled", False):
+        user = os.getenv("STOCK_AGENT_USER", "admin")
+        print(f"ℹ️ {user} 계정이 브리핑 받기 OFF — 발송 생략")
+        sys.exit(0)
 
     if not is_configured():
         print("⚠️ 카카오 미설정 (.env에 KAKAO_* 키 필요)")

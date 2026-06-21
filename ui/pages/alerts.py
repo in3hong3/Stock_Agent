@@ -31,6 +31,35 @@ def render_tab_alerts():
     except Exception as e:
         print(f"알림 채널 상태 표시 실패: {e}")
 
+    # ── 📩 카카오 데일리 브리핑 받기 (계정별 ON/OFF) ──
+    try:
+        from ui.pages._meta import load_meta, save_meta
+        from modules.kakao_notify import is_configured as _kakao_ok
+
+        st.markdown("---")
+        meta = load_meta()
+        enabled = bool(meta.get("kakao_briefing_enabled", False))
+
+        bc1, bc2 = st.columns([4, 1.2])
+        with bc1:
+            st.markdown(
+                "**📩 카카오 데일리 브리핑** — 매일 아침(평일) 내 포트 일정 + 시황을 카카오톡으로"
+            )
+        with bc2:
+            new_val = st.toggle("받기", value=enabled, key="kakao_briefing_toggle")
+        if new_val != enabled:
+            save_meta(kakao_briefing_enabled=new_val)
+            st.toast("📩 브리핑 받기 " + ("켜짐" if new_val else "꺼짐"))
+            st.rerun()
+
+        if new_val and not _kakao_ok():
+            st.warning("⚠️ 받기는 켰지만 이 계정의 카카오톡이 아직 연결 안 됐어요. "
+                       "위 '카카오톡 알림 켜는 법'으로 토큰을 발급해 서버 .env에 추가해야 실제로 전송됩니다.")
+        elif new_val:
+            st.caption("✅ 매일 아침 8시(평일)에 카카오톡으로 받습니다.")
+    except Exception as e:
+        print(f"브리핑 토글 표시 실패: {e}")
+
     with st.form("add_alert_form"):
         ac1, ac2, ac3, ac4 = st.columns([2, 3, 2, 1])
         with ac1:
