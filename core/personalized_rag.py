@@ -14,23 +14,28 @@ logger = logging.getLogger(__name__)
 class PersonalizedRAG:
     """포트폴리오 정보를 활용한 개인화 RAG 시스템"""
     
-    def __init__(self, rag_engine: RAGEngine, portfolio_path: str = "data/portfolio.csv"):
+    def __init__(self, rag_engine: RAGEngine, portfolio_path: str = None):
         """
         초기화
-        
+
         Args:
             rag_engine: 기본 RAG 엔진
-            portfolio_path: 포트폴리오 CSV 파일 경로
+            portfolio_path: 포트폴리오 CSV 경로. None이면 로그인 계정별 경로 자동 사용.
         """
         self.rag_engine = rag_engine
+        # portfolio_path=None이면 매 로드 시 현재 로그인 계정 경로를 동적으로 사용
+        self._dynamic_path = portfolio_path is None
         self.portfolio_path = portfolio_path
         self.portfolio_analyzer = PortfolioAnalyzer(rag_engine)
         self.portfolio_df = None
         self._load_portfolio()
-    
+
     def _load_portfolio(self):
-        """포트폴리오 데이터 로드"""
+        """포트폴리오 데이터 로드 (동적 모드면 현재 로그인 계정 경로 재조회)"""
         try:
+            if self._dynamic_path:
+                from utils.user_data import portfolio_path as _user_pf
+                self.portfolio_path = _user_pf()
             self.portfolio_df = self.portfolio_analyzer.load_portfolio_from_csv(self.portfolio_path)
             if not self.portfolio_df.empty:
                 logger.info(f"포트폴리오 로드 완료: {len(self.portfolio_df)}개 종목")

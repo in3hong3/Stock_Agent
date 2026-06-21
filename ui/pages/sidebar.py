@@ -146,9 +146,14 @@ def render_side_panel(fg_index, fg_status, status_text, point_color):
     uc1, uc2 = st.columns([3, 1])
     uc1.markdown(f"👤 **{uid}**님 로그인 중")
     if uc2.button("로그아웃", key="logout_btn", use_container_width=True):
+        # 계정별 데이터/캐시를 모두 비워 다음 로그인 계정과 섞이지 않게
         for k in ("authenticated", "user_id", "_migrated", "df_portfolio",
-                  "portfolio_data", "tracker_briefing", "portfolio_eval"):
+                  "portfolio_data", "tracker_briefing", "portfolio_eval",
+                  "personalized_rag_engine", "personalized_rag_messages",
+                  "_signal_result", "_pred_recorded", "reload_csv",
+                  "_auto_price_fill_done", "_auto_price_fill_done_portfolio"):
             st.session_state.pop(k, None)
+        st.cache_data.clear()  # 시그널/스냅샷 등 가격 의존 캐시 무효화
         st.rerun()
     st.divider()
 
