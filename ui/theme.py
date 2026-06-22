@@ -67,7 +67,14 @@ def get_realtime_market_summary():
         fng_data = {"종목": "공포/탐욕", "현재가": 50.0, "등락": "Neutral"}
         try:
             url = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata'
-            headers = {'User-Agent': 'Mozilla/5.0'}
+            # CNN은 봇 차단(418)이 있어 브라우저 수준 헤더가 모두 필요 (UA만으론 418)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Origin': 'https://edition.cnn.com',
+                'Referer': 'https://edition.cnn.com/markets/fear-and-greed',
+            }
             r = requests.get(url, headers=headers, timeout=5)
             if r.status_code == 200:
                 data = r.json()

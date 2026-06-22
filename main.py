@@ -29,9 +29,14 @@ class CNNScraper:
     @staticmethod
     def get_fear_and_greed_index():
         url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+        # CNN dataviz API는 봇 차단(HTTP 418)이 있어 브라우저 수준 헤더가 모두 필요하다.
+        # (UA·Referer만으로는 418 — Accept/Accept-Language/Origin까지 있어야 200)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://edition.cnn.com/"
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": "https://edition.cnn.com",
+            "Referer": "https://edition.cnn.com/markets/fear-and-greed",
         }
         
         print("Processing [Fear & Greed Index]...")
