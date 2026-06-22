@@ -119,22 +119,25 @@ def scan_sectors(include_themes: bool = True) -> Dict[str, Any]:
     }
 
 
-def explain_hot_sectors(scan: Dict[str, Any], top_n: int = 5, holdings: List[Dict] = None) -> str:
-    """상위 섹터를 AI가 웹 검색 기반으로 해설. web_llm 사용 (없으면 안내)."""
+def explain_sector(scan: Dict[str, Any], ticker: str, holdings: List[Dict] = None) -> str:
+    """선택한 단일 섹터/테마 ETF를 AI가 웹 검색 기반으로 심층 해설. web_llm 사용 (없으면 안내)."""
     from utils.web_llm import get_search_provider, search_generate
 
     if not get_search_provider():
         return "⚠️ 검색 LLM 키가 없습니다. .env에 PERPLEXITY_API_KEY / GEMINI_API_KEY 중 하나를 설정하세요."
 
-    rows = scan.get("rows", [])[:top_n]
-    if not rows:
-        return "스캔 데이터가 없습니다."
+    rows = scan.get("rows", [])
+    row = next((r for r in rows if r["ticker"] == ticker), None)
+    if not row:
+        return "선택한 섹터 데이터를 찾을 수 없습니다."
+
+    def _fmt(v):
+        return f"{v:+.1f}" if v is not None else "N/A"
 
     bench = scan.get("benchmark_1m")
-    lines = [f"- {r['name']} ({r['ticker']}, {r['kind']}): "
-             f"1개월 {r['r_1m']:+.1f}% (벤치 대비 {r['rs_1m']:+.1f}%p), 3개월 {r['r_3m']:+.1f}%"
-             for r in rows]
-    rank_text = "\n".join(lines)
+    metric = (f"{row['name']} ({row['ticker']}, {row['kind']}): "
+              f"1주 {_fmt(row['r_1w'])}% · 1개월 {_fmt(row['r_1m'])}% (벤치 대비 {_fmt(row['rs_1m'])}%p) · "
+              f"3개월 {_fmt(row['r_3m'])}% · 모멘텀점수 {row['momentum_score']:.1f}")
 
     hold_line = ""
     if holdings:
@@ -149,36 +152,35 @@ def explain_hot_sectors(scan: Dict[str, Any], top_n: int = 5, holdings: List[Dic
         "딥테크 기업의 기술적 해자(Moat)를 정량적 가치로 환산하는 데 독보적인 능력이 있습니다. "
         "냉정하고 날카로운 투자 전문가의 시각으로 분석하며, 근거가 된 매체명을 본문에 표기합니다."
     )
-    prompt = f"""오늘 기준 미국 섹터/테마 ETF 모멘텀 상위권입니다 (벤치마크 SPY 1개월 {bench:+.1f}%).
-아래는 정량 측정된 '지금 강한 섹터' 순위입니다:
+    prompt = f"""오늘 기준, 미국 섹터/테마 ETF 모멘텀 상위에 든 '{row['name']}' 섹터 하나를 심층 분석합니다.
+(벤치마크 SPY 1개월 {_fmt(bench)}%)
 
-{rank_text}
+[정량 측정값]
+{metric}
 
-위 정량 순위를 출발점으로, 상위 {top_n}개 섹터 각각에 대해 아래 프레임워크를 엄격히 적용해
+위 정량 데이터를 출발점으로, 이 '{row['name']}' 섹터에 대해 아래 프레임워크를 엄격히 적용해
 심층 분석 보고서를 작성하세요. 최신 기사·기관 리포트·자금 흐름을 검색해 근거로 삼으세요.
 
-[섹터별 분석 프레임워크 — 상위 {top_n}개 각각]
-
-각 섹터마다 다음을 포함:
+[분석 프레임워크]
 1. **핵심 동력**: 이 섹터가 지금 돈이 몰리는 근본 구조 (수요/공급/정책/실적 사이클)
 2. **정량 펀더멘털**: 섹터 대표 기업들의 매출 성장률·밸류에이션(P/E, PSR)·FCF 추세를
    기관 투자자 관점에서 평가. 모멘텀이 실적이 받쳐주는지 vs 멀티플 팽창인지 구분.
 3. **시장 심리 & 컨센서스**: 최근 기사·기관 리포트의 컨센서스 변화, 기대감과 우려.
 4. **기술적 해자 & 리스크**: 진입 장벽/경쟁 구도, 그리고 치명적 하방·매크로·규제 리스크를 가감 없이.
-5. **중장기 뷰 (1~3년)**: 단기 노이즈를 배제한 구조적 추세 여부 + 대표 수혜 종목 2-3개(티커)와
+5. **중장기 뷰 (1~3년)**: 단기 노이즈를 배제한 구조적 추세 여부 + 대표 수혜 종목 3-5개(티커)와
    각각의 최종 스탠스(강력 매수 / 분할 매수 / 관망 / 매도).
 
 [출력 구조]
-### 🔥 지금 뜨는 섹터 종합 (2-3문장: 큰 그림, 자금 로테이션 방향)
+### 🔥 {row['name']} — 한눈에 (2-3문장: 지금 강한 이유 + 자금 흐름 방향)
 
-### 섹터별 심층 분석 (상위 {top_n}개)
-(각 섹터를 위 5개 프레임워크로, 표와 글머리 기호 활용)
+### 심층 분석
+(위 5개 프레임워크를 표와 글머리 기호로)
 
 ### ⚠️ 과열·되돌림 경고
-- 이미 멀티플이 과도하거나 단기 순환 정점 신호가 있는 섹터 1-2개를 명확히 지적
+- 이미 멀티플이 과도하거나 단기 순환 정점 신호가 있으면 명확히 지적
 
 ### 💡 내 포트폴리오 관점
-- 사용자 보유 종목이 어느 핫 섹터에 속하는지, 비어있는 핫 섹터(미보유 기회)는 무엇인지{hold_line}
+- 사용자 보유 종목이 이 섹터와 어떻게 연결되는지, 비어있는 기회는 무엇인지{hold_line}
 
 [규칙]
 - 흔한 면책 조항이나 AI로서의 변명은 생략. 단, 맨 마지막 한 줄에만

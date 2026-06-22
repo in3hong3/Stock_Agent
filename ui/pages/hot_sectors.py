@@ -3,7 +3,7 @@ import streamlit as st
 
 
 def render_tab_hot_sectors():
-    from modules.sector_scanner import scan_sectors, explain_hot_sectors, score_stocks
+    from modules.sector_scanner import scan_sectors, explain_sector, score_stocks
     from modules.issue_tracker import get_portfolio_holdings
 
     st.header("🔥 AI 핫 섹터 조사")
@@ -93,17 +93,31 @@ def render_tab_hot_sectors():
 
 @st.fragment
 def _ai_explain_fragment(scan):
-    """AI 섹터 해설 — 슬라이더/버튼 조작이 이 fragment 내부에서만 rerun."""
-    from modules.sector_scanner import explain_hot_sectors
+    """AI 섹터 해설 — '지금 뜨는 섹터' 중 드롭다운으로 하나 골라 해설. 이 fragment 내부에서만 rerun."""
+    from modules.sector_scanner import explain_sector
     from modules.issue_tracker import get_portfolio_holdings
 
     st.markdown("---")
     st.subheader("🤖 AI 섹터 해설")
-    st.caption("상위 섹터가 '왜 지금 강한지'를 최신 뉴스 기반으로 분석합니다. (LLM 웹검색 — 토큰 비용 발생)")
+    st.caption("'지금 뜨는 섹터' 중 하나를 골라 '왜 지금 강한지'를 최신 뉴스 기반으로 심층 분석합니다. (LLM 웹검색 — 토큰 비용 발생)")
+
+    hot = [r for r in scan.get("rows", []) if r.get("hot")]
+    if not hot:
+        st.info("핫 섹터가 없습니다.")
+        return
+    by_ticker = {r["ticker"]: r for r in hot}
 
     ec1, ec2 = st.columns([3, 1])
     with ec1:
-        top_n = st.slider("해설할 상위 섹터 수", 3, 8, 5, key="hot_top_n")
+        sel = st.selectbox(
+            "해설할 섹터 선택",
+            options=[r["ticker"] for r in hot],
+            format_func=lambda tk: (
+                f"{by_ticker[tk]['name']} · 1개월 {by_ticker[tk]['r_1m']:+.1f}% "
+                f"(벤치대비 {by_ticker[tk]['rs_1m']:+.1f}%p)"
+            ),
+            key="hot_sector_pick",
+        )
     with ec2:
         st.write("")
         explain_clicked = st.button("📝 AI 해설 생성", type="primary", use_container_width=True)
@@ -115,17 +129,22 @@ def _ai_explain_fragment(scan):
         else:
             from utils.loading import ProgressBanner
             try:
-                with ProgressBanner(title="AI가 핫 섹터 분석 중", total=2, icon="🔥") as banner:
-                    banner.step("📰 상위 섹터 최신 뉴스·자금흐름 검색 중...")
-                    banner.step("✍️ 섹터 전략 분석 작성 중... (15~30초)")
+                sel_name = by_ticker[sel]["name"]
+                with ProgressBanner(title=f"AI가 '{sel_name}' 분석 중", total=2, icon="🔥") as banner:
+                    banner.step("📰 해당 섹터 최신 뉴스·자금흐름 검색 중...")
+                    banner.step("✍️ 섹터 심층 분석 작성 중... (15~30초)")
                     holdings = get_portfolio_holdings()
-                    result = explain_hot_sectors(scan, top_n=top_n, holdings=holdings)
+                    result = explain_sector(scan, sel, holdings=holdings)
                     banner.done("✅ 분석 완료!")
                 st.session_state["hot_sector_explain"] = result
+                st.session_state["hot_sector_explain_for"] = by_ticker[sel]["name"]
             except Exception as e:
                 st.error(f"❌ 해설 생성 실패: {e}")
 
     if st.session_state.get("hot_sector_explain"):
+        for_name = st.session_state.get("hot_sector_explain_for")
+        if for_name:
+            st.caption(f"📌 분석 섹터: {for_name}")
         st.markdown(st.session_state["hot_sector_explain"])
 
 
