@@ -25,6 +25,9 @@ try:
 except ImportError:
     pass
 
+from utils.yf_quiet import silence_yfinance
+silence_yfinance()  # ETF(SOXL 등) 실적 조회 시 yfinance 404 로그 노이즈 억제
+
 # 대상 사용자 고정 (세션 없으므로)
 os.environ.setdefault("STOCK_AGENT_USER", "admin")
 

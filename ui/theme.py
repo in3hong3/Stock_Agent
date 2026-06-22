@@ -63,8 +63,8 @@ def get_realtime_market_summary():
 
         results = []
 
-        # CNN 공포/탐욕 지수
-        fng_data = {"종목": "공포/탐욕", "현재가": 50.0, "등락": "Neutral"}
+        # CNN 공포/탐욕 지수 — 실패 시 가짜 50/Neutral 대신 행을 비워 'N/A'로 표시
+        # (조용한 폴백이 고장을 가리지 않도록)
         try:
             url = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata'
             # CNN은 봇 차단(418)이 있어 브라우저 수준 헤더가 모두 필요 (UA만으론 418)
@@ -80,10 +80,9 @@ def get_realtime_market_summary():
                 data = r.json()
                 score = data['fear_and_greed']['score']
                 rating = data['fear_and_greed']['rating'].title()
-                fng_data = {"종목": "공포/탐욕", "현재가": float(score), "등락": rating}
+                results.append({"종목": "공포/탐욕", "현재가": float(score), "등락": rating})
         except Exception:
             pass
-        results.append(fng_data)
 
         for ticker_id, name in mapping.items():
             try:

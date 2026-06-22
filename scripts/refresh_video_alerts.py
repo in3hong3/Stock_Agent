@@ -12,6 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 load_dotenv()
 
+from utils.yf_quiet import silence_yfinance
+silence_yfinance()  # ETF 등 펀더멘털 없는 종목의 404 로그 노이즈 억제
+
 from modules.video_timing import refresh_alerts, needs_refresh
 from modules.issue_tracker import get_portfolio_holdings
 
