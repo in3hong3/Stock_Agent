@@ -5,12 +5,21 @@
 """
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any
 
 import requests
 
 _UA = {"User-Agent": "StockAgent/1.0 (personal research; contact: user@example.com)"}
+
+# 서버 시간대(UTC)와 무관하게 항상 한국시간(KST) 기준으로 "오늘"을 판단한다.
+# (KST는 DST 없음 → 고정 UTC+9. tzdata 의존 없이 어디서나 동작)
+KST = timezone(timedelta(hours=9))
+
+
+def now_kst() -> datetime:
+    """한국시간 기준 현재 시각 (서버가 UTC여도 KST 날짜로 일치시키기 위함)."""
+    return datetime.now(KST)
 
 
 # ──────────────────────────────────────────────
@@ -283,7 +292,7 @@ def compose_front_page_search(
     else:
         task = """보유 종목 각각의 최신 뉴스와 미국 시장 전반의 주요 이슈를 검색해서 신문 1면을 작성해."""
 
-    prompt = f"""오늘 날짜: {datetime.now().strftime('%Y년 %m월 %d일')}
+    prompt = f"""오늘 날짜: {now_kst().strftime('%Y년 %m월 %d일')}
 
 [내 보유 종목 — yfinance 실시간 그라운드 트루스]
 {holdings_block}
@@ -337,8 +346,8 @@ def publish_daily_paper(
     from utils.web_llm import get_search_provider
     provider = get_search_provider()
     if provider:
-        today = datetime.now().strftime("%Y-%m-%d")
-        now_hm = datetime.now().strftime("%H:%M")
+        today = now_kst().strftime("%Y-%m-%d")
+        now_hm = now_kst().strftime("%H:%M")
         store = _load_paper_store()
         previous = store.get("front") if store.get("date") == today else None
 
@@ -361,8 +370,8 @@ def publish_daily_paper(
     # ── 기존 OpenAI 경로 (RSS 헤드라인 기반) ──
     from openai import OpenAI
 
-    today = datetime.now().strftime("%Y-%m-%d")
-    now_hm = datetime.now().strftime("%H:%M")
+    today = now_kst().strftime("%Y-%m-%d")
+    now_hm = now_kst().strftime("%H:%M")
     store = _load_paper_store()
     current_keys = _collect_keys(holdings_news, filings)
 
@@ -415,7 +424,7 @@ def publish_daily_paper(
         model=model,
         messages=[
             {"role": "system", "content": _EDITOR_SYSTEM},
-            {"role": "user", "content": f"""오늘 날짜: {datetime.now().strftime('%Y년 %m월 %d일')}
+            {"role": "user", "content": f"""오늘 날짜: {now_kst().strftime('%Y년 %m월 %d일')}
 
 {source}
 
@@ -436,6 +445,6 @@ def publish_daily_paper(
 def get_saved_paper() -> Dict[str, Any]:
     """오늘 발행된 신문이 있으면 반환 (앱 재시작 후에도 유지)"""
     store = _load_paper_store()
-    if store.get("date") == datetime.now().strftime("%Y-%m-%d") and store.get("front"):
+    if store.get("date") == now_kst().strftime("%Y-%m-%d") and store.get("front"):
         return {"front": store["front"], "time": store["time"]}
     return {}

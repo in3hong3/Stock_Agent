@@ -60,9 +60,9 @@ def _strip_md(text: str) -> str:
 def build_briefing() -> str:
     from modules.issue_tracker import get_portfolio_holdings
     from modules.event_calendar import get_all_events, get_upcoming_events
-    from modules.daily_paper import get_saved_paper
+    from modules.daily_paper import get_saved_paper, now_kst
 
-    today = datetime.now().strftime("%m/%d (%a)")
+    today = now_kst().strftime("%m/%d (%a)")
     parts = [f"📊 Stock Agent 데일리 · {today}"]
 
     holdings = get_portfolio_holdings()

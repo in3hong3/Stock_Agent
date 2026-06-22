@@ -51,14 +51,15 @@ def render_macro_grid():
 def render_tab_paper():
     from modules.daily_paper import (
         fetch_holdings_news, get_sec_filings,
-        publish_daily_paper, get_saved_paper,
+        publish_daily_paper, get_saved_paper, now_kst,
     )
     from modules.market_overview import get_macro_data
     from modules.issue_tracker import get_portfolio_holdings
     from modules.event_calendar import get_all_events, get_upcoming_events
 
-    today_str = datetime.date.today().strftime("%Y년 %m월 %d일")
-    weekday = ["월", "화", "수", "목", "금", "토", "일"][datetime.date.today().weekday()]
+    _today_kst = now_kst()
+    today_str = _today_kst.strftime("%Y년 %m월 %d일")
+    weekday = ["월", "화", "수", "목", "금", "토", "일"][_today_kst.weekday()]
     st.markdown(f"""
     <div style="text-align:center; border-top: 4px double #E2E8F0; border-bottom: 1px solid #475569; padding: 18px 0 12px 0; margin-bottom: 4px;">
         <div style="font-family: 'Noto Serif KR', 'Pretendard', serif; font-size: 40px; font-weight: 900; letter-spacing: 0.15em; color: #FFFFFF;">
@@ -171,7 +172,7 @@ def render_tab_paper():
         if paper:
             st.markdown(
                 f"<span style='font-size:0.75rem;color:#64748B;'>"
-                f"📅 {datetime.date.today().strftime('%Y.%m.%d')} 발행 {paper['time']} · AI 편집 · "
+                f"📅 {now_kst().strftime('%Y.%m.%d')} 발행 {paper['time']} · AI 편집 · "
                 f"<span style='color:#00FFA3;'>오늘 종일 유지됩니다</span></span>",
                 unsafe_allow_html=True,
             )
