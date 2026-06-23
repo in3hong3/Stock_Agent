@@ -318,11 +318,19 @@ def render_tab_tracker():
         st.warning(f"자산 추이 표시 실패: {e}")
 
 
-    # ── 4. 전체 이슈 브리핑 ──
+    # ── 4. 이슈 브리핑 (원하는 종목만 선택, 복수 가능) ──
     st.markdown("---")
+    name_by_ticker = {it["ticker"]: (it.get("name") or it["ticker"]) for it in tracked}
+    sel_tickers = st.multiselect(
+        "브리핑할 종목 선택 (복수 가능 · 기본 전체)",
+        options=tickers,
+        default=tickers,
+        format_func=lambda t: f"{name_by_ticker.get(t, t)} ({t})",
+        key="brief_tickers",
+    )
     bc1, bc2 = st.columns([1, 1])
     with bc1:
-        brief_clicked = st.button("🤖 전체 종목 이슈 브리핑 생성", type="primary", use_container_width=True)
+        brief_clicked = st.button("🤖 선택 종목 이슈 브리핑 생성", type="primary", use_container_width=True)
     with bc2:
         if st.button("🔄 시세/뉴스 새로고침", use_container_width=True):
             st.cache_data.clear()
@@ -333,24 +341,27 @@ def render_tab_tracker():
         return fetch_ticker_news(ticker, max_news=6)
 
     if brief_clicked:
-        from utils.loading import ProgressBanner
-        try:
-            with ProgressBanner(
-                title="전체 종목 이슈 브리핑 생성 중",
-                total=3, icon="🤖",
-            ) as banner:
-                banner.step(f"📰 {len(tickers)}개 종목 뉴스 수집 중...")
-                holdings_news = {t: cached_news(t) for t in tickers}
-                banner.step("✍️ AI가 종목별 이슈 분석 중...")
-                briefing = summarize_all_issues(holdings_news)
-                banner.step("📋 브리핑 정리 중...")
-                banner.done("✅ 브리핑 생성 완료!")
-            st.session_state.tracker_briefing = {
-                "text": briefing,
-                "time": datetime.datetime.now().strftime("%H:%M"),
-            }
-        except Exception as e:
-            st.error(f"❌ 브리핑 생성 실패: {e}")
+        if not sel_tickers:
+            st.warning("브리핑할 종목을 1개 이상 선택하세요.")
+        else:
+            from utils.loading import ProgressBanner
+            try:
+                with ProgressBanner(
+                    title="이슈 브리핑 생성 중",
+                    total=3, icon="🤖",
+                ) as banner:
+                    banner.step(f"📰 {len(sel_tickers)}개 종목 뉴스 수집 중...")
+                    holdings_news = {t: cached_news(t) for t in sel_tickers}
+                    banner.step("✍️ AI가 종목별 이슈 분석 중...")
+                    briefing = summarize_all_issues(holdings_news)
+                    banner.step("📋 브리핑 정리 중...")
+                    banner.done("✅ 브리핑 생성 완료!")
+                st.session_state.tracker_briefing = {
+                    "text": briefing,
+                    "time": datetime.datetime.now().strftime("%H:%M"),
+                }
+            except Exception as e:
+                st.error(f"❌ 브리핑 생성 실패: {e}")
 
     if st.session_state.get("tracker_briefing"):
         b = st.session_state.tracker_briefing
