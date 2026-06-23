@@ -86,41 +86,66 @@ def _get_access_token() -> Optional[str]:
     return _refresh_access_token()
 
 
-def send_kakao_memo(text: str, link_url: str = "http://161.33.6.231/") -> bool:
-    """나에게 보내기 — 텍스트 메모 1건 발송. 성공 시 True."""
+KAKAO_TEXT_LIMIT = 2000  # 카카오 기본 'text' 템플릿 text 필드 최대 길이
+
+
+def _chunk_text(text: str, limit: int) -> List[str]:
+    """줄 경계 기준으로 limit 이하 조각들로 분할 (문장 중간 끊김 최소화)."""
+    if len(text) <= limit:
+        return [text]
+    chunks, cur = [], ""
+    for line in text.split("\n"):
+        while len(line) > limit:           # 한 줄 자체가 한도를 넘으면 강제 분할
+            chunks.append(line[:limit])
+            line = line[limit:]
+        if cur and len(cur) + 1 + len(line) > limit:
+            chunks.append(cur)
+            cur = line
+        else:
+            cur = f"{cur}\n{line}" if cur else line
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
+def _post_memo(text: str, link_url: str) -> bool:
+    """텍스트 메모 1건 POST (401이면 토큰 1회 갱신 후 재시도)."""
     token = _get_access_token()
     if not token:
         return False
-
     template = {
         "object_type": "text",
-        "text": text[:1000],  # 카카오 텍스트 메모 길이 제한
+        "text": text[:KAKAO_TEXT_LIMIT],
         "link": {"web_url": link_url, "mobile_web_url": link_url},
         "button_title": "앱에서 보기",
     }
+    payload = {"template_object": json.dumps(template, ensure_ascii=False)}
     try:
-        r = requests.post(
-            _MEMO_URL,
-            headers={"Authorization": f"Bearer {token}"},
-            data={"template_object": json.dumps(template, ensure_ascii=False)},
-            timeout=10,
-        )
-        if r.status_code == 401:
-            # 토큰 만료/무효 → 1회 강제 갱신 후 재시도
+        r = requests.post(_MEMO_URL, headers={"Authorization": f"Bearer {token}"}, data=payload, timeout=10)
+        if r.status_code == 401:  # 토큰 만료/무효 → 강제 갱신 후 재시도
             token = _refresh_access_token()
             if not token:
                 return False
-            r = requests.post(
-                _MEMO_URL,
-                headers={"Authorization": f"Bearer {token}"},
-                data={"template_object": json.dumps(template, ensure_ascii=False)},
-                timeout=10,
-            )
+            r = requests.post(_MEMO_URL, headers={"Authorization": f"Bearer {token}"}, data=payload, timeout=10)
         r.raise_for_status()
         return True
     except Exception as e:
         print(f"카카오 메모 발송 실패: {e}")
         return False
+
+
+def send_kakao_memo(text: str, link_url: str = "http://161.33.6.231/") -> bool:
+    """나에게 보내기 — 2000자를 넘으면 여러 건으로 나눠 발송. 전부 성공해야 True."""
+    parts = _chunk_text(text, KAKAO_TEXT_LIMIT - 12)  # (i/n) 머리표 공간 확보
+    n = len(parts)
+    ok = True
+    for i, part in enumerate(parts, 1):
+        body = part if n == 1 else f"({i}/{n})\n{part}"
+        if not _post_memo(body, link_url):
+            ok = False
+        if i < n:
+            time.sleep(0.4)  # 메시지 도착 순서 보장
+    return ok
 
 
 def send_alert_kakao(triggered: List[Dict[str, Any]], condition_types: Dict[str, str]) -> bool:

@@ -32,7 +32,9 @@ silence_yfinance()  # ETF(SOXL 등) 실적 조회 시 yfinance 404 로그 노이
 os.environ.setdefault("STOCK_AGENT_USER", "admin")
 
 LINK = "http://161.33.6.231/"
-LIMIT = 3500  # 카카오 텍스트 메모 길이 (2000자+ 발송 확인됨)
+# send_kakao_memo가 2000자 단위로 자동 분할 발송하므로 여기선 전체 상한만 둔다
+# (최대 ~3건 = 6000자. 그보다 길면 마지막에 앱 링크 안내로 마무리).
+LIMIT = 5800
 
 
 def _strip_md(text: str) -> str:
