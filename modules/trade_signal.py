@@ -593,8 +593,19 @@ def decide_action(analysis: Dict, stance: str, regime_mod: int,
     # 계단식 청산 라인 (모든 종목 — 매수/보유 둘 다 의미)
     exit_ladder = build_exit_ladder(analysis, avg)
 
+    # ── 표시용 셋업 라벨 보정 ──
+    # 최종 action은 밸류에이션까지 합쳐 결정되는데, 기술적 setup 라벨만 따로 약세
+    # ("비중 축소/추세 이탈/익절")로 남으면 '매수인데 매도 문구'가 붙어 매도 신호처럼 보인다.
+    # action이 매수면 라벨도 매수 쪽으로 일관되게 맞춘다 (판정 임계는 그대로, 표시만 보정).
+    display_setup = analysis["setup"]
+    if action in ("적극 매수", "분할 매수") and any(x in display_setup for x in ("축소", "이탈", "익절", "관망")):
+        if verdict == "저평가":
+            display_setup = "🎯 저평가 눌림목 매수 (밸류가 기술 약세 상쇄)"
+        else:
+            display_setup = "🎯 분할 매수 자리 (기술 약세 상쇄)"
+
     return {
-        "action": action, "icon": icon, "adj_score": score,
+        "action": action, "icon": icon, "adj_score": score, "setup": display_setup,
         "plan": plan, "entry": entry, "stop": stop, "target": target, "rr": rr,
         "stop_price": stop_price, "extra": extra,
         **position,  # size_qty, size_invest, size_weight_pct, size_max_loss
