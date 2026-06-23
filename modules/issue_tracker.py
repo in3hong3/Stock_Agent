@@ -260,7 +260,7 @@ def fetch_ticker_news(ticker: str, max_news: int = 6) -> List[Dict[str, Any]]:
     return NewsAgent.fetch_news(agent, ticker, max_news)
 
 
-def summarize_all_issues(holdings_news: Dict[str, List[Dict]], model: str = "gpt-4o-mini") -> str:
+def summarize_all_issues(holdings_news: Dict[str, List[Dict]], model: str = "gpt-4.1") -> str:
     """
     보유 종목 전체의 뉴스를 한 번의 LLM 호출로 묶어서 브리핑 생성.
     holdings_news: {ticker: [news...]}
