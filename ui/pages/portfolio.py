@@ -419,6 +419,30 @@ def render_tab_portfolio():
             st.toast("💾 저장 완료 — '📌 내 종목' 탭에 즉시 반영")
             st.rerun()
 
+    # ── 🗑️ 종목 삭제 (드롭다운에서 골라 즉시 삭제) ──
+    _df_cur = st.session_state.df_portfolio
+    if not _df_cur.empty and "ticker" in _df_cur.columns:
+        with st.expander("🗑️ 종목 삭제"):
+            _name_by_tk = {
+                str(r["ticker"]): str(r.get("name") or r["ticker"])
+                for _, r in _df_cur.dropna(subset=["ticker"]).iterrows()
+            }
+            del_sel = st.multiselect(
+                "삭제할 종목 선택 (복수 가능)",
+                options=list(_name_by_tk.keys()),
+                format_func=lambda t: f"{_name_by_tk.get(t, t)} ({t})",
+                key="portfolio_delete_sel",
+            )
+            if st.button("🗑️ 선택 종목 삭제", disabled=not del_sel, key="portfolio_delete_btn"):
+                kept = _df_cur[~_df_cur["ticker"].astype(str).isin(del_sel)].copy()
+                kept.to_csv(PORTFOLIO_FILE, index=False)
+                st.session_state.df_portfolio = kept
+                st.cache_data.clear()
+                for key in ("_auto_price_fill_done", "_auto_price_fill_done_portfolio"):
+                    st.session_state.pop(key, None)
+                st.success(f"🗑️ {len(del_sel)}개 종목 삭제 완료")
+                st.rerun()
+
     try:
         from modules.issue_tracker import get_usdkrw_rate
 
