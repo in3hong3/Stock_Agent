@@ -136,12 +136,24 @@ def _post_memo(text: str, link_url: str) -> bool:
 
 def send_kakao_memo(text: str, link_url: str = "http://161.33.6.231/") -> bool:
     """나에게 보내기 — 2000자를 넘으면 여러 건으로 나눠 발송. 전부 성공해야 True."""
-    parts = _chunk_text(text, KAKAO_TEXT_LIMIT - 12)  # (i/n) 머리표 공간 확보
-    n = len(parts)
+    return send_kakao_messages([text], link_url)
+
+
+def send_kakao_messages(parts: List[str], link_url: str = "http://161.33.6.231/") -> bool:
+    """여러 메시지를 순서대로 발송. 각 항목이 2000자를 넘으면 추가 분할.
+    (i/N) 머리표로 순서를 표시. 전부 성공해야 True."""
+    # 빈 항목 제거 후, 각 항목을 한도 이하로 (필요 시) 추가 분할
+    flat: List[str] = []
+    for p in parts:
+        if p and p.strip():
+            flat.extend(_chunk_text(p.strip(), KAKAO_TEXT_LIMIT - 12))  # (i/N) 공간 확보
+    if not flat:
+        return False
+    n = len(flat)
     ok = True
-    for i, part in enumerate(parts, 1):
-        body = part if n == 1 else f"({i}/{n})\n{part}"
-        if not _post_memo(body, link_url):
+    for i, body in enumerate(flat, 1):
+        text = body if n == 1 else f"({i}/{n})\n{body}"
+        if not _post_memo(text, link_url):
             ok = False
         if i < n:
             time.sleep(0.4)  # 메시지 도착 순서 보장

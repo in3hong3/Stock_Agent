@@ -114,8 +114,30 @@ def build_briefing() -> str:
     return text
 
 
+def split_briefing_messages(text: str) -> list:
+    """브리핑을 기사 항목별로 분할: [헤드라인 블록, 주요기사 1, 2, 3, 편집장 블록].
+    - 주요 기사 번호 줄("1. ", "2. " …)과 "▸ 편집장…" 에서 새 메시지로 끊는다.
+    - 첫 블록에는 날짜·일정·헤드라인이 함께 들어간다.
+    분할 마커가 없으면(신문 미발행 등) 통째로 1건 반환.
+    """
+    import re as _re
+    blocks, cur = [], []
+    for ln in text.split("\n"):
+        s = ln.strip()
+        is_article = bool(_re.match(r"^\d+\.\s", s))   # 주요 기사 1./2./3.
+        is_editor = s.startswith("▸ 편집장")             # 편집장의 한마디
+        if (is_article or is_editor) and cur:
+            blocks.append("\n".join(cur).strip())
+            cur = [ln]
+        else:
+            cur.append(ln)
+    if cur:
+        blocks.append("\n".join(cur).strip())
+    return [b for b in blocks if b]
+
+
 def main():
-    from modules.kakao_notify import is_configured, send_kakao_memo
+    from modules.kakao_notify import is_configured, send_kakao_messages
     from ui.pages._meta import load_meta
 
     # 이 계정이 '브리핑 받기'를 켰는지 확인 (가격 알림 탭의 토글)
@@ -129,10 +151,12 @@ def main():
         sys.exit(1)
 
     text = build_briefing()
+    messages = split_briefing_messages(text)
     print("─" * 50)
     print(text)
     print("─" * 50)
-    ok = send_kakao_memo(text)
+    print(f"기사 항목별 분할: {len(messages)}건 발송")
+    ok = send_kakao_messages(messages)
     print("발송:", "✅ 성공" if ok else "❌ 실패")
     sys.exit(0 if ok else 1)
 
