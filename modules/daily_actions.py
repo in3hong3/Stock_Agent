@@ -67,6 +67,8 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
     actions = []
 
     # ── 1. 임박 이벤트 (3일 이내) ──
+    #   종목 이벤트(실적발표)는 해당 종목 카드에 붙이고, 시장 이벤트만 별도 항목으로.
+    stock_events: Dict[str, str] = {}
     try:
         from modules.event_calendar import get_all_events, get_upcoming_events
         events = get_all_events(tickers)
@@ -74,61 +76,66 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
             d_day = "오늘" if ev["d_day"] == 0 else f"D-{ev['d_day']}"
             title = ev["title"]
             if "실적발표" in title:
-                ticker = title.split(" ")[1] if " " in title else ""
-                actions.append({
-                    "priority": 1, "icon": "📅",
-                    "text": f"**{d_day} {title}** — {_stance_msg('earnings_near', stance)}",
-                })
+                tk = title.split(" ")[1] if " " in title else ""
+                stock_events[tk] = f"{d_day} 실적발표 — {_stance_msg('earnings_near', stance)}"
             elif "FOMC" in title or "CPI" in title:
                 actions.append({
-                    "priority": 1, "icon": "🏛️",
-                    "text": f"**{d_day} {title}** — 발표 전후 변동성 주의, 신규 진입은 발표 이후 권장",
+                    "priority": 1, "icon": "🏛️", "kind": "general",
+                    "text": f"{d_day} {title} — 발표 전후 변동성 주의, 신규 진입은 발표 이후 권장",
                 })
             elif "휴장" in title:
                 actions.append({
-                    "priority": 3, "icon": "🏖️",
+                    "priority": 3, "icon": "🏖️", "kind": "general",
                     "text": f"{d_day} {title} — 거래 일정 참고하세요",
                 })
     except Exception as e:
         print(f"이벤트 액션 실패: {e}")
 
-    # ── 2. 종목 시그널 ──
+    # ── 2. 종목 시그널 (종목별 1카드로 묶음) ──
     if signals is not None:
-        # 정밀 시그널 엔진 결과 사용 (셋업 + 진입/손절/목표 기반)
         holds = []
         for s in signals:
-            hold_str = _holding_str(s, fx)
+            tk = s["ticker"]
+            hold_str = _holding_str(s, fx).replace("보유 ", "")
             pr = s.get("profit_rate")
-            pr_str = f" {pr:+.1f}%" if pr is not None else ""
+            pr_str = f"{pr:+.1f}%" if pr is not None else ""
+            meta = " · ".join(x for x in (pr_str, hold_str) if x)  # "+30.0% · 20주 ($20,780)"
+
             if s["action"] == "관망":
-                # 관망 종목도 보유액·수익률은 요약줄에 함께 노출
-                tag = f"{s['ticker']}({s['adj_score']:+.0f}"
-                tag += f", {hold_str.replace('보유 ', '')}{pr_str})" if hold_str else f"{pr_str})"
+                tag = f"{tk}({s['adj_score']:+.0f}" + (f", {meta})" if meta else ")")
                 holds.append(tag)
-                for ex in s.get("extra", []):
-                    actions.append({"priority": 1, "icon": "⚠️", "text": f"**{s['ticker']}** {ex}"})
                 continue
-            is_strong = "🟢🟢" in s["icon"] or "🔴🔴" in s["icon"]
-            # 진입/손절/목표가 있으면 구체적 가격으로, 없으면 플랜 문구
+
+            # 카드 본문 라인들 (이모지, 텍스트)
+            lines = []
+            if stock_events.get(tk):
+                lines.append(("📅", stock_events[tk]))
+            verdict = s.get("valuation", {}).get("verdict", "")
+            setup = s.get("setup", "")
+            lines.append(("🎯", setup + (f" · 밸류 {verdict}" if verdict else "")))
             if s.get("entry"):
-                detail = (f"진입 {s['entry']:,.2f} / 손절 {s['stop']:,.2f} / 목표 {s['target']:,.2f} "
-                          f"(손익비 1:{s['rr']})")
+                lines.append(("📋", f"신규 진입 {s['entry']:,.2f} · 손절 {s['stop']:,.2f} · "
+                                    f"목표 {s['target']:,.2f} (손익비 1:{s['rr']})"))
             else:
-                detail = s["plan"]
-            # 보유 평가액 + 수익률을 액션 문구 앞부분에 노출 (직관적 포지션 파악)
-            hold_prefix = f" · {hold_str}{pr_str}" if hold_str else ""
-            actions.append({
-                "priority": 1 if is_strong else 2,
-                "icon": s["icon"],
-                "text": f"**{s['ticker']} → {s['action']}**{hold_prefix} · {s.get('setup','')} — {detail}",
-            })
+                lines.append(("📋", s["plan"]))
+            # 보유분 관리/경고 (밸류 상세 🏷️는 카드에서 생략 — 상세 매매 시그널 탭에 있음)
             for ex in s.get("extra", []):
-                actions.append({"priority": 1, "icon": "⚠️", "text": f"**{s['ticker']}** {ex}"})
+                if ex.startswith("🏷️"):
+                    continue
+                emoji, _, rest = ex.partition(" ")
+                lines.append((emoji, rest or ex))
+
+            is_strong = "🟢🟢" in s["icon"] or "🔴🔴" in s["icon"]
+            actions.append({
+                "priority": 1 if is_strong else 2, "kind": "stock",
+                "icon": s["icon"], "title": f"{tk} → {s['action']}", "meta": meta,
+                "lines": lines,
+            })
 
         if holds:
             actions.append({
-                "priority": 5, "icon": "⚪",
-                "text": f"나머지 {len(holds)}종목은 **홀드** — {', '.join(holds)} · 특별한 행동 불필요 (상세는 아래 매매 시그널 참고)",
+                "priority": 5, "icon": "⚪", "kind": "general",
+                "text": f"홀드 {len(holds)}종목 — {', '.join(holds)} · 특별한 행동 불필요 (상세는 매매 시그널 참고)",
             })
     else:
         # 폴백: 단순 RSI/급등락 규칙
