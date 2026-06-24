@@ -77,7 +77,9 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
             title = ev["title"]
             if "실적발표" in title:
                 tk = title.split(" ")[1] if " " in title else ""
-                stock_events[tk] = f"{d_day} 실적발표 — {_stance_msg('earnings_near', stance)}"
+                _msg = _stance_msg('earnings_near', stance)
+                _msg = _msg.split(" — ", 1)[1] if " — " in _msg else _msg  # '실적 임박 —' 중복 제거
+                stock_events[tk] = f"{d_day} 실적발표 — {_msg}"
             elif "FOMC" in title or "CPI" in title:
                 actions.append({
                     "priority": 1, "icon": "🏛️", "kind": "general",
@@ -112,7 +114,9 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                 lines.append(("📅", stock_events[tk]))
             verdict = s.get("valuation", {}).get("verdict", "")
             setup = s.get("setup", "")
-            lines.append(("🎯", setup + (f" · 밸류 {verdict}" if verdict else "")))
+            # setup 자체가 이모지(🎯/📉/⚪…)로 시작 → 그 이모지를 라인 마커로 쓰고 중복 방지
+            se_emoji, _, se_rest = setup.partition(" ")
+            lines.append((se_emoji or "🎯", (se_rest or setup) + (f" · 밸류 {verdict}" if verdict else "")))
             if s.get("entry"):
                 lines.append(("📋", f"신규 진입 {s['entry']:,.2f} · 손절 {s['stop']:,.2f} · "
                                     f"목표 {s['target']:,.2f} (손익비 1:{s['rr']})"))
