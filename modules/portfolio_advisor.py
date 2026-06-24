@@ -207,7 +207,8 @@ def get_or_create_eval(holdings: List[Dict], stance: str, force: bool = False) -
     당일+성향 캐시 확인 후 없으면 생성.
     Returns: {text, time, cached: bool}
     """
-    today = datetime.now().strftime("%Y-%m-%d")
+    from modules.daily_paper import now_kst  # 신문 등과 동일하게 KST 기준 '오늘'
+    today = now_kst().strftime("%Y-%m-%d")
     store = _load_evals()
     key = f"{today}|{stance}"
 
@@ -215,7 +216,7 @@ def get_or_create_eval(holdings: List[Dict], stance: str, force: bool = False) -
         return {**store[key], "cached": True}
 
     text = evaluate_portfolio(holdings, stance)
-    entry = {"text": text, "time": datetime.now().strftime("%H:%M")}
+    entry = {"text": text, "time": now_kst().strftime("%H:%M")}
 
     # 오늘 것만 유지 (과거 날짜 정리)
     store = {k: v for k, v in store.items() if k.startswith(today)}

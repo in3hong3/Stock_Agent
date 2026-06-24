@@ -184,7 +184,9 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
         print(f"알림 액션 실패: {e}")
 
     # ── 4. 오늘 발행물 체크 ──
-    today = datetime.now().strftime("%Y-%m-%d")
+    # 신문·AI평가 저장 날짜가 KST 기준이므로 여기서도 KST로 비교 (UTC면 날짜 경계에 어긋남)
+    from modules.daily_paper import now_kst
+    today = now_kst().strftime("%Y-%m-%d")
     try:
         from modules.daily_paper import _load_paper_store
         if _load_paper_store().get("date") != today:
