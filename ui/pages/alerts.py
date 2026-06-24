@@ -60,6 +60,74 @@ def render_tab_alerts():
     except Exception as e:
         print(f"브리핑 토글 표시 실패: {e}")
 
+    # ── 🎯 관심종목 매수 타이밍 알림 ──
+    try:
+        from modules.watchlist import (
+            load_watchlist, add_to_watchlist, remove_from_watchlist, detect_buy_timings,
+        )
+        from ui.pages._meta import load_meta as _lm, save_meta as _sm, resolve_stance
+
+        st.markdown("---")
+        st.subheader("🎯 관심종목 매수 타이밍")
+        st.caption("관심종목·보유종목을 장중 30분마다 스마트 분석(눌림목/과매도/돌파/저평가)해, "
+                   "매수 신호가 새로 뜨면 카카오톡으로 알려드립니다.")
+
+        wmeta = _lm()
+        wl_on = bool(wmeta.get("watchlist_alert_enabled", True))
+        tc1, tc2 = st.columns([4, 1.2])
+        with tc1:
+            st.markdown("**🔔 매수 타이밍 알림** — 비매수→매수로 새로 바뀔 때만 1회 (스팸 방지)")
+        with tc2:
+            wl_new = st.toggle("받기", value=wl_on, key="watchlist_alert_toggle")
+        if wl_new != wl_on:
+            _sm(watchlist_alert_enabled=wl_new)
+            st.toast("🎯 매수 타이밍 알림 " + ("켜짐" if wl_new else "꺼짐"))
+            st.rerun()
+
+        with st.form("add_watch_form"):
+            wa1, wa2 = st.columns([4, 1])
+            with wa1:
+                w_input = st.text_input("관심종목 추가", placeholder="티커 또는 한글명 (예: 팔란티어 / PLTR / 005930)",
+                                        label_visibility="collapsed")
+            with wa2:
+                w_sub = st.form_submit_button("➕ 관심추가", use_container_width=True)
+            if w_sub and w_input.strip():
+                r = add_to_watchlist(w_input.strip())
+                if r.get("success"):
+                    st.success(f"✅ {r['name']} ({r['ticker']}) 관심종목 추가")
+                    st.rerun()
+                else:
+                    st.warning(r.get("error", "추가 실패"))
+
+        wl = load_watchlist()
+        if wl:
+            st.caption(f"관심종목 {len(wl)}개 (보유종목은 자동으로 '추가매수' 타이밍 체크)")
+            for it in wl:
+                wc1, wc2 = st.columns([5, 1])
+                wc1.markdown(f"• **{it.get('name', it['ticker'])}** ({it['ticker']})")
+                if wc2.button("🗑️", key=f"del_watch_{it['ticker']}", help="삭제"):
+                    remove_from_watchlist(it["ticker"])
+                    st.rerun()
+        else:
+            st.info("관심종목이 없습니다. (보유종목은 자동으로 '추가매수' 타이밍을 체크합니다)")
+
+        if st.button("🎯 지금 매수 타이밍 보기", use_container_width=True, key="watch_check_now"):
+            with st.spinner("관심+보유종목 분석 중..."):
+                buys = detect_buy_timings(stance=resolve_stance(), update_state=False)["all_buys"]
+            if buys:
+                st.success(f"현재 매수 시그널 {len(buys)}건")
+                for s in buys:
+                    plan = (f" · 진입 {s['entry']:,.2f}/손절 {s['stop']:,.2f}/목표 {s['target']:,.2f}"
+                            if s.get("entry") else "")
+                    st.markdown(f"- [{s.get('alert_kind', '매수')}] **{s['ticker']} → {s['action']}** "
+                                f"· {s.get('setup', '')}{plan}")
+            else:
+                st.info("지금은 매수 타이밍인 종목이 없습니다.")
+    except Exception as e:
+        print(f"관심종목 UI 실패: {e}")
+
+    st.markdown("---")
+    st.subheader("📍 수동 가격/RSI 알림")
     with st.form("add_alert_form"):
         ac1, ac2, ac3, ac4 = st.columns([2, 3, 2, 1])
         with ac1:
