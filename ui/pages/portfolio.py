@@ -409,6 +409,25 @@ def render_tab_portfolio():
     with sc2:
         if st.button("💾 변경사항 저장", type="primary", use_container_width=True,
                      disabled=not has_unsaved, key="save_portfolio_btn"):
+            # 매도(수량 감소/행 삭제) 감지 → 저장 후 매매일지 기록 유도
+            _old_pf = st.session_state.df_portfolio[_CORE_COLS]
+            _sells = []
+            for _, _orow in _old_pf.iterrows():
+                _tk = str(_orow["ticker"]).strip()
+                _oq = float(_orow.get("quantity") or 0)
+                if not _tk or _tk.lower() == "nan" or _oq <= 0:
+                    continue
+                _nrow = edited_df[edited_df["ticker"].astype(str).str.strip() == _tk]
+                _nq = float(_nrow.iloc[0]["quantity"] or 0) if not _nrow.empty else 0.0
+                if _nq < _oq:
+                    _sells.append({
+                        "ticker": _tk, "name": str(_orow.get("name") or _tk),
+                        "qty": _oq - _nq, "avg_price": float(_orow.get("avg_price") or 0),
+                        "current_price": float(_orow.get("current_price") or 0),
+                    })
+            if _sells:
+                st.session_state["_pending_sells"] = _sells
+
             edited_df.to_csv(PORTFOLIO_FILE, index=False)
             st.session_state.df_portfolio = edited_df.copy()
             # 트래커의 cached_snapshot / cached_signals 등 가격·수량 의존 캐시 무효화
@@ -434,6 +453,18 @@ def render_tab_portfolio():
                 key="portfolio_delete_sel",
             )
             if st.button("🗑️ 선택 종목 삭제", disabled=not del_sel, key="portfolio_delete_btn"):
+                # 삭제 = 전량 매도 → 매매일지 기록 유도
+                _sells = []
+                for _, r in _df_cur[_df_cur["ticker"].astype(str).isin(del_sel)].iterrows():
+                    _q = float(r.get("quantity") or 0)
+                    if _q > 0:
+                        _sells.append({
+                            "ticker": str(r["ticker"]), "name": str(r.get("name") or r["ticker"]),
+                            "qty": _q, "avg_price": float(r.get("avg_price") or 0),
+                            "current_price": float(r.get("current_price") or 0),
+                        })
+                if _sells:
+                    st.session_state["_pending_sells"] = _sells
                 kept = _df_cur[~_df_cur["ticker"].astype(str).isin(del_sel)].copy()
                 kept.to_csv(PORTFOLIO_FILE, index=False)
                 st.session_state.df_portfolio = kept
@@ -442,6 +473,42 @@ def render_tab_portfolio():
                     st.session_state.pop(key, None)
                 st.success(f"🗑️ {len(del_sel)}개 종목 삭제 완료")
                 st.rerun()
+
+    # ── 📒 매도 감지 → 매매일지 기록 유도 (포트폴리오는 이미 차감됨, 여기선 기록만) ──
+    _pending = st.session_state.get("_pending_sells")
+    if _pending:
+        from modules.trade_journal import add_trade
+        from modules.daily_paper import now_kst
+        st.markdown("---")
+        st.info("📉 매도(수량 감소)가 감지됐어요. 체결가를 넣고 기록하면 **실현손익·승률**에 반영됩니다. "
+                "(포트폴리오 수량은 이미 반영됨 — 여기선 기록만)")
+        with st.form("record_sells_form"):
+            _px = {}
+            for s in _pending:
+                _default = s["current_price"] if s["current_price"] > 0 else s["avg_price"]
+                pl1, pl2 = st.columns([3, 2])
+                pl1.markdown(f"**{s['name']} ({s['ticker']})** — {s['qty']:,.0f}주 매도 · 평단 {s['avg_price']:,.2f}")
+                _px[s["ticker"]] = pl2.number_input(
+                    f"체결가 · {s['ticker']}", min_value=0.0, value=round(_default, 2), step=0.01,
+                    key=f"sell_px_{s['ticker']}",
+                )
+            fc1, fc2 = st.columns(2)
+            _rec = fc1.form_submit_button("📒 매매일지에 기록", type="primary", use_container_width=True)
+            _skip = fc2.form_submit_button("건너뛰기", use_container_width=True)
+        if _rec:
+            _n = 0
+            for s in _pending:
+                p = _px.get(s["ticker"], 0)
+                if p > 0:
+                    add_trade(now_kst().strftime("%Y-%m-%d"), s["ticker"], s["name"], "sell",
+                              s["qty"], p, memo="포트폴리오 편집에서 매도 감지", avg_price=s["avg_price"])
+                    _n += 1
+            st.session_state.pop("_pending_sells", None)
+            st.success(f"📒 {_n}건 매매일지 기록 완료 (실현손익 반영). '매매일지' 탭에서 확인하세요.")
+            st.rerun()
+        if _skip:
+            st.session_state.pop("_pending_sells", None)
+            st.rerun()
 
     try:
         from modules.issue_tracker import get_usdkrw_rate
