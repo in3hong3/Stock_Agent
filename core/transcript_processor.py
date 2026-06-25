@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 load_dotenv()
 
 
-from config.settings import TYPO_CORRECTIONS, LLM_MODEL_DEFAULT
+from config.settings import TYPO_CORRECTIONS, LLM_MODEL_DEFAULT, TRANSCRIPT_MODEL
 
 class TranscriptProcessor:
     """
@@ -155,14 +155,19 @@ class TranscriptProcessor:
 }}
 
 **주의사항:**
+- ⚠️ 이 대본은 음성인식(STT) 결과라 오타·오인식이 매우 많다. 문맥으로 올바른 용어·회사명·미국 티커·숫자로 반드시 교정한 뒤 추출하라.
+  예) 밀년→million, 은닝→어닝(실적), 이별선→이동평균선, 정별되→정배열, 계수해서→계속해서,
+      서클→Circle(CRCL), 아Q·아이옹크→IonQ(IONQ), 오클러→Oklo(OKLO), 레드켓→Red Cat(RCAT), 템퍼스→Tempus AI(TEM).
+- 회사를 정확히 식별하고 'ticker'에는 실제 미국 상장 티커를 넣어라. 비상장(예: SpaceX)이면 ticker는 빈 값으로.
+  확신이 없으면 name 옆에 (추정)으로 표시하라. 같은 회사를 STT 오타 때문에 두 종목으로 중복 생성하지 마라.
 - "무식하게" 자르지 말고, 주제가 바뀌는 지점을 정확히 파악하여 raw_text를 구성하세요.
-- 숫자가 언급되면 하나도 빠짐없이 summary와 key_metrics에 반영하세요.
+- 숫자가 언급되면 하나도 빠짐없이 summary와 key_metrics에 반영하세요. (단 STT로 깨진 숫자·연도는 문맥으로 보정)
 - JSON 형식만 반환하고 다른 설명은 하지 마세요.
 """
 
-        
+
         response = self.client.chat.completions.create(
-            model=LLM_MODEL_DEFAULT,
+            model=TRANSCRIPT_MODEL,
             messages=[
                 {
                     "role": "system",

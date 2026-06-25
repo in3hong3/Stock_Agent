@@ -35,6 +35,8 @@ VECTOR_DB_TYPE = os.getenv("VECTOR_DB_TYPE", "pinecone")
 # LLM 모델 설정
 LLM_MODEL_DEFAULT = "gpt-4o-mini"
 LLM_MODEL_SMART = "gpt-4o"
+# 유튜브 대본 정제 전용 (STT 노이즈 교정 + 종목/티커/숫자 추출은 어려운 작업이라 상위 모델)
+TRANSCRIPT_MODEL = "gpt-4.1"
 EMBEDDING_MODEL = "text-embedding-3-small"
 
 # 티커 오타 보정 매핑
