@@ -227,36 +227,70 @@ def apply_theme(bg_color=None, text_color=None, point_color=None):
             letter-spacing: -0.02em;
         }}
 
-        /* ── 3. 탭 ──────────────────────────── */
+        /* ── 3. 탭 — 시안 B: 메인=채운 알약(균등폭) · 소메뉴=밑줄 텍스트 ── */
+        /* 메인 메뉴(최상위 탭): 균등폭 알약, 활성=브랜드 그린 채움 */
         .stTabs [data-baseweb="tab-list"] {{
             gap: 6px;
             background-color: transparent !important;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
         }}
         .stTabs [data-baseweb="tab"] {{
-            height: 42px;
-            white-space: pre;
+            flex: 1 1 0;
+            min-width: 0;
+            justify-content: center;
+            height: 44px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             background-color: #1A1C24 !important;
-            border-radius: 10px !important;
+            border-radius: 999px !important;
             color: #94A3B8 !important;
             border: 1px solid transparent !important;
-            padding: 0 16px !important;
+            padding: 0 12px !important;
             font-weight: 500 !important;
             transition: all 0.15s ease;
         }}
         .stTabs [data-baseweb="tab"]:hover {{
             color: #E2E8F0 !important;
-            border-color: rgba(255,255,255,0.12) !important;
+            background-color: #22252F !important;
         }}
         .stTabs [aria-selected="true"] {{
-            background-color: #31343F !important;
-            color: #FFFFFF !important;
-            font-weight: 700 !important;
-            border-color: {accent}55 !important;
-            box-shadow: 0 0 0 1px {accent}33;
+            background-color: #00FFA3 !important;
+            color: #05241A !important;
+            font-weight: 500 !important;
+            border-color: #00FFA3 !important;
         }}
         .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] {{
             display: none;
+        }}
+        /* 소메뉴(분석관 내부 = tab-panel 안의 탭): 밑줄 텍스트형 — 메인과 대비 */
+        .stTabs [data-baseweb="tab-panel"] [data-baseweb="tab-list"] {{
+            gap: 18px !important;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            flex-wrap: wrap;
+        }}
+        .stTabs [data-baseweb="tab-panel"] [data-baseweb="tab"] {{
+            flex: 0 0 auto !important;
+            height: 36px;
+            min-width: 0;
+            background-color: transparent !important;
+            border-radius: 0 !important;
+            border: none !important;
+            border-bottom: 2px solid transparent !important;
+            color: #8A93A6 !important;
+            padding: 0 2px !important;
+            font-weight: 400 !important;
+        }}
+        .stTabs [data-baseweb="tab-panel"] [data-baseweb="tab"]:hover {{
+            background-color: transparent !important;
+            color: #E2E8F0 !important;
+        }}
+        .stTabs [data-baseweb="tab-panel"] [aria-selected="true"] {{
+            background-color: transparent !important;
+            color: #00FFA3 !important;
+            border: none !important;
+            border-bottom: 2px solid #00FFA3 !important;
+            font-weight: 500 !important;
         }}
 
         /* ── 4. 버튼 ────────────────────────── */
