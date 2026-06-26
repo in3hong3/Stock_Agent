@@ -369,6 +369,53 @@ def render_tab_tracker():
         st.markdown(f"#### 📋 이슈 브리핑 <span style='font-size:0.8rem;color:#64748B;'>(생성: {b['time']})</span>", unsafe_allow_html=True)
         st.markdown(b["text"])
 
+    # ── 🎤 유튜버 집단지성 (RAG 대본 데이터 집계, LLM 0) ──
+    st.markdown("---")
+    with st.expander("🎤 유튜버 집단지성 — 영상들이 내 종목을 어떻게 보나 (RAG 집계)", expanded=False):
+        try:
+            from modules.youtuber_consensus import (
+                scan_summary_meta, consensus_for, radar, sentiment_shift,
+            )
+
+            @st.cache_data(ttl=1800)
+            def _yt_rows():
+                return scan_summary_meta()
+
+            rows = _yt_rows()
+            st.caption(f"수집된 유튜브 대본 분석 {len(rows):,}건 기준 · 영상 단위 집계")
+            period = st.radio("기간", [30, 90, 0],
+                              format_func=lambda d: (f"최근 {d}일" if d else "전체 기간"),
+                              horizontal=True, key="yt_period", index=1)
+            days = period or None
+
+            st.markdown("**📊 내 종목 컨센서스** (영상들의 매수/중립/주의)")
+            con = consensus_for(rows, tickers, days=days)
+            for tk in tickers:
+                c = con[tk]
+                if c["total"] == 0:
+                    st.caption(f"• {tk}: 해당 기간 언급 없음")
+                    continue
+                tone = ("🟢 매수 우위" if c["score"] > 20
+                        else "🔴 주의 우위" if c["score"] < -20 else "⚪ 중립")
+                st.markdown(f"- **{tk}** {tone} (점수 {c['score']:+d}) — "
+                            f"매수 {c['buy']}·중립 {c['neutral']}·주의 {c['caution']} (영상 {c['total']})")
+
+            shifts = sentiment_shift(rows, tickers)
+            if shifts:
+                st.markdown("**⚠️ 톤 전환 감지** (최근 2주 vs 이전)")
+                for s in shifts:
+                    arrow = "📈 매수쪽으로" if s["delta"] > 0 else "📉 신중쪽으로"
+                    st.markdown(f"- **{s['ticker']}** {arrow}: 이전 {s['prior']:+d} → 최근 {s['recent']:+d}")
+
+            st.markdown("**🔭 신규 종목 레이더** (미보유인데 자주 다뤄짐)")
+            for r in radar(rows, set(tickers), top_n=8, days=days):
+                tone = ("🟢" if r["score"] > 20 else "🔴" if r["score"] < -20 else "⚪")
+                st.markdown(f"- {tone} **{r['ticker']}** — {r['mentions']}회 언급 "
+                            f"(매수 {r['buy']}·중립 {r['neutral']}·주의 {r['caution']})")
+            st.caption("RAG(유튜브 대본) 메타데이터 집계 · LLM 비용 0 · 투자 권유 아님, 참고용")
+        except Exception as e:
+            st.warning(f"유튜버 집단지성 생성 실패: {e}")
+
     # ── AI 보유종목 평가 ──
     st.markdown("---")
     st.subheader("🤖 AI 보유종목 평가")
