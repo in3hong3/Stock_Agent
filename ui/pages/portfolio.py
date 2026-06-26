@@ -600,6 +600,59 @@ def render_tab_portfolio():
                     st.rerun()
                 except ValueError:
                     st.error("숫자만 입력하세요. (콤마는 허용)")
+
+        # ── 💵 현금 기준 실행 지시 (뭘 팔고 뭘 몇 주 살지) ──
+        st.markdown("---")
+        st.markdown("#### 💵 현금 기준 실행 지시")
+        if cash["usd"] <= 0:
+            st.info("위 **'💵 보유 현금 입력'** 에 **달러 현금($)** 을 넣으면, 그 현금으로 "
+                    "**무엇을 몇 주 사야 하는지** 구체적으로 알려드립니다.")
+        else:
+            try:
+                from modules.trade_signal import generate_signals
+                from modules.action_plan import build_action_plan
+                from ui.pages._meta import resolve_stance
+
+                @st.cache_data(ttl=300)
+                def _plan_signals(_key, _stance, _risk):
+                    return generate_signals(get_portfolio_holdings(), stance=_stance,
+                                            seed=0, risk_pct=_risk)["signals"]
+
+                stance = resolve_stance()
+                hkey = tuple(
+                    (str(r["ticker"]), float(r.get("quantity") or 0), float(r.get("current_price") or 0))
+                    for _, r in st.session_state.df_portfolio.dropna(subset=["ticker"]).iterrows()
+                )
+                deploy = st.slider("현금 투입 비율 (%)", 10, 100, 100, 5, key="deploy_pct",
+                                   help="보유 달러 현금 중 몇 %를 이번에 투입할지")
+                sigs = _plan_signals(hkey, stance, cur_risk)
+                plan = build_action_plan(sigs, cash["usd"], deploy_pct=deploy)
+
+                _avail_msg = f"가용 현금 ${cash['usd'] * deploy / 100:,.0f}"
+                if plan["proceeds"]:
+                    _avail_msg += f" + 매도대금 ${plan['proceeds']:,.0f}"
+                _avail_msg += f" = **${plan['available']:,.0f}** 투입 가능"
+                st.caption(_avail_msg)
+
+                if plan["sells"]:
+                    st.markdown("**🔴 팔 것**")
+                    for x in plan["sells"]:
+                        st.markdown(f"- **{x['ticker']} {x['qty']:,}주 매도** "
+                                    f"(≈${x['amount']:,.0f}) — {x['action']}")
+                if plan["buys"]:
+                    st.markdown("**🟢 살 것**")
+                    for x in plan["buys"]:
+                        _tgt = f" · 목표 {x['target']:,.2f}" if x.get("target") else ""
+                        st.markdown(f"- **{x['ticker']} {x['qty']:,}주 매수** "
+                                    f"(≈${x['amount']:,.0f} @ ${x['price']:,.2f}) — {x['action']}{_tgt}")
+                    st.caption(f"매수 합계 ${plan['spent']:,.0f} · 잔여 현금 ${plan['leftover']:,.0f}")
+                if not plan["sells"] and not plan["buys"]:
+                    st.info("지금은 뚜렷한 매도/매수 신호가 없습니다 (대부분 관망) — 현금 보유 유지가 무난.")
+
+                st.caption("⚠️ 규칙 기반 참고용 — 투자 권유 아님, 최종 판단·책임은 본인. 주문은 직접 체결하세요. "
+                           "(현재가 기준 수량, 강한 신호에 더 배분)")
+            except Exception as e:
+                st.warning(f"실행 지시 생성 실패: {e}")
     except Exception as e:
         st.warning(f"총 평가액 계산 실패: {e}")
 
