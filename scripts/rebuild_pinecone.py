@@ -44,13 +44,24 @@ def main():
         stats = ps.index.describe_index_stats()
         ns_count = stats.get('namespaces', {}).get('stock-summaries', {}).get('vector_count', 0)
         if ns_count > 0:
-            # 전체 목록 페이징 방식으로 가져오기
+            # 전체 목록 페이징 — pinecone 클라 버전별로 page가 ID 리스트이거나
+            # ListResponse(.vectors[].id) 객체라서 둘 다 안전하게 처리
             for page in ps.index.list(namespace='stock-summaries'):
-                if not page:
-                    break
-                result = ps.index.fetch(ids=page, namespace='stock-summaries')
-                for vec in result.get('vectors', {}).values():
-                    url = vec.get('metadata', {}).get('영상링크', '')
+                if hasattr(page, 'vectors'):
+                    ids = [it.id for it in page.vectors]
+                elif isinstance(page, (list, tuple)):
+                    ids = list(page)
+                elif isinstance(page, str):
+                    ids = [page]
+                else:
+                    ids = []
+                if not ids:
+                    continue
+                result = ps.index.fetch(ids=ids, namespace='stock-summaries')
+                vectors = result.get('vectors', {}) if isinstance(result, dict) else getattr(result, 'vectors', {})
+                for vec in (vectors.values() if hasattr(vectors, 'values') else vectors):
+                    meta = (vec.get('metadata', {}) if isinstance(vec, dict) else getattr(vec, 'metadata', {})) or {}
+                    url = meta.get('영상링크', '')
                     if url:
                         existing_urls.add(url)
         print(f"이미 Pinecone에 저장된 영상: {len(existing_urls)}개")
