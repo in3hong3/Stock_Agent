@@ -320,13 +320,14 @@ def render_tab_tracker():
 
     # ── 4. 이슈 브리핑 (원하는 종목만 선택, 복수 가능) ──
     st.markdown("---")
-    name_by_ticker = {it["ticker"]: (it.get("name") or it["ticker"]) for it in tracked}
-    sel_tickers = st.multiselect(
-        "브리핑할 종목 선택 (복수 가능 · 기본 전체)",
+    st.caption("브리핑할 종목 (탭해서 켜고 끄기 · 기본 전체)")
+    sel_tickers = st.pills(
+        "브리핑할 종목",
         options=tickers,
+        selection_mode="multi",
         default=tickers,
-        format_func=lambda t: f"{name_by_ticker.get(t, t)} ({t})",
         key="brief_tickers",
+        label_visibility="collapsed",
     )
     bc1, bc2 = st.columns([1, 1])
     with bc1:
