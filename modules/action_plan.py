@@ -37,18 +37,43 @@ def build_action_plan(signals: List[Dict[str, Any]], cash_usd: float,
     tot_w = sum(_BUY_WEIGHT[s["action"]] for s in cands)
     buys: List[Dict[str, Any]] = []
     spent = 0.0
+    order = sorted(cands, key=lambda x: -_BUY_WEIGHT[x["action"]])  # 강한 신호 우선
+    by_ticker: Dict[str, Dict[str, Any]] = {}
     if available > 0 and tot_w > 0:
-        for s in sorted(cands, key=lambda x: -_BUY_WEIGHT[x["action"]]):
+        # 1차: 신호 강도 가중 분배
+        for s in order:
             alloc = available * (_BUY_WEIGHT[s["action"]] / tot_w)
             price = float(s["price"])
-            qty = int(alloc // price)  # 살 수 있는 정수 주식 수
+            qty = int(alloc // price)
             if qty <= 0:
                 continue
-            amt = qty * price
-            buys.append({"ticker": s["ticker"], "qty": qty, "price": price, "amount": amt,
-                         "action": s["action"], "entry": s.get("entry"),
-                         "target": s.get("target"), "setup": s.get("setup", "")})
-            spent += amt
+            b = {"ticker": s["ticker"], "qty": qty, "price": price, "amount": qty * price,
+                 "action": s["action"], "entry": s.get("entry"),
+                 "target": s.get("target"), "setup": s.get("setup", "")}
+            buys.append(b)
+            by_ticker[s["ticker"]] = b
+            spent += qty * price
+
+        # 2차: 잔여 현금을 강한 신호부터 1주씩 추가해 거의 다 투입 (정수 주식 한계 보완)
+        remaining = available - spent
+        changed = True
+        while changed:
+            changed = False
+            for s in order:
+                price = float(s["price"])
+                if price <= remaining + 1e-9:
+                    b = by_ticker.get(s["ticker"])
+                    if b is None:
+                        b = {"ticker": s["ticker"], "qty": 0, "price": price, "amount": 0.0,
+                             "action": s["action"], "entry": s.get("entry"),
+                             "target": s.get("target"), "setup": s.get("setup", "")}
+                        by_ticker[s["ticker"]] = b
+                        buys.append(b)
+                    b["qty"] += 1
+                    b["amount"] = b["qty"] * price
+                    remaining -= price
+                    changed = True
+        spent = sum(b["amount"] for b in buys)
 
     return {"sells": sells, "buys": buys, "available": round(available, 2),
             "spent": round(spent, 2), "leftover": round(available - spent, 2),
