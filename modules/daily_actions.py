@@ -56,12 +56,13 @@ def _holding_str(s: Dict, fx: float) -> str:
 
 def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                   stance: str = "aggressive", signals: List[Dict] = None,
-                  fx: float = 1400.0) -> List[Dict[str, Any]]:
+                  fx: float = 1400.0, cash_usd: float = 0.0) -> List[Dict[str, Any]]:
     """
     오늘의 액션 리스트 생성.
     snap_df: get_snapshot() 결과 (티커/1일/RSI 컬럼 사용)
     signals: trade_signal.generate_signals()의 signals — 있으면 정밀 시그널 사용
     fx: 원/달러 환율 (한국주 보유액 달러 환산용)
+    cash_usd: 투입 가능 달러 현금 — 매수 액션을 현금 현실에 맞게 반영 (0이면 매수 보류/교체 제안)
     Returns: [{priority(낮을수록 중요), icon, text}]
     """
     actions = []
@@ -129,6 +130,10 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                 emoji, _, rest = ex.partition(" ")
                 lines.append((emoji, rest or ex))
 
+            # 현금 없는데 매수 신호면 '보류'로 솔직히 표시 (못 사니까)
+            if s["action"] in ("적극 매수", "분할 매수") and cash_usd <= 0:
+                lines.append(("⏸️", "현금 0 — 지금은 매수 보류 (현금 생기면 후보)"))
+
             is_strong = "🟢🟢" in s["icon"] or "🔴🔴" in s["icon"]
             actions.append({
                 "priority": 1 if is_strong else 2, "kind": "stock",
@@ -141,6 +146,34 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                 "priority": 5, "icon": "⚪", "kind": "general",
                 "text": f"홀드 {len(holds)}종목 — {', '.join(holds)} · 특별한 행동 불필요 (상세는 매매 시그널 참고)",
             })
+
+        # ── 0. 자금 계획 (현금 반영 — 맨 위에) ──
+        try:
+            from modules.action_plan import build_action_plan
+            plan = build_action_plan(signals, cash_usd, deploy_pct=100)
+            buy_sigs = [s for s in signals if s["action"] in ("적극 매수", "분할 매수")]
+            if cash_usd and cash_usd > 0 and plan["buys"]:
+                items = ", ".join(f"{b['ticker']} {b['qty']}주" for b in plan["buys"][:5])
+                actions.append({
+                    "priority": 0, "icon": "💰", "kind": "general",
+                    "text": f"현금 ${cash_usd:,.0f} 실행 — {items} 매수 "
+                            f"(잔여 ${plan['leftover']:,.0f}) · 상세는 포트폴리오 탭",
+                })
+            elif cash_usd <= 0 and plan["sells"] and plan["buys"]:
+                sell_s = ", ".join(f"{x['ticker']} {x['qty']}주" for x in plan["sells"])
+                buy_s = ", ".join(f"{b['ticker']} {b['qty']}주" for b in plan["buys"][:4])
+                actions.append({
+                    "priority": 0, "icon": "🔄", "kind": "general",
+                    "text": f"현금 0 — 교체 제안: **{sell_s} 매도** → **{buy_s} 매수**",
+                })
+            elif cash_usd <= 0 and buy_sigs:
+                cand = ", ".join(s["ticker"] for s in buy_sigs[:5])
+                actions.append({
+                    "priority": 0, "icon": "💰", "kind": "general",
+                    "text": f"현금 0 — 신규 매수 보류. 매수 후보(현금 생기면): {cand}. 지금은 보유 유지",
+                })
+        except Exception as e:
+            print(f"자금 계획 실패: {e}")
     else:
         # 폴백: 단순 RSI/급등락 규칙
         try:
