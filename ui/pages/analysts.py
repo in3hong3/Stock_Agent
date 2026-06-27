@@ -180,6 +180,11 @@ def render_tab_tech():
                         f"- **RSI (14일):** {ind.get('rsi')} ➜ **{ind.get('rsi_signal')}**\n"
                         f"- **MACD:** {ind.get('macd')} ➜ **{ind.get('macd_trend')} 추세**\n"
                         f"- **볼린저 밴드 위치:** {ind.get('bb_position')}%\n"
+                        f"- **지지/저항:** ${ind.get('support')} / ${ind.get('resistance')} "
+                        f"(저점 {ind.get('low_trend')} · 고점 {ind.get('high_trend')})\n"
+                        f"- **52주:** 고 ${ind.get('high_52w')} / 저 ${ind.get('low_52w')} "
+                        f"(고점 대비 {ind.get('pct_from_52w_high')}%)\n"
+                        f"- **매물대 POC:** ${ind.get('poc')}\n"
                     )
                 else:
                     err = (result.get("indicators") or {}).get("error", "알 수 없는 오류")

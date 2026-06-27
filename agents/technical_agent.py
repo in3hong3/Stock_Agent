@@ -99,6 +99,9 @@ class TechnicalAgent(BaseAgent):
             
             # 7. 추세 판단
             trend = self._determine_trend(current_price, ma20, ma50, ma200)
+
+            # 7-1. 가격 구조 (스윙/지지·저항/매물대) — 패턴 추론용
+            structure = self._analyze_structure(df, current_price)
             
             # 8. 최근 가격 변동
             price_change_1d = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
@@ -144,6 +147,9 @@ class TechnicalAgent(BaseAgent):
                 "price_change_1d": round(price_change_1d, 2),
                 "price_change_5d": round(price_change_5d, 2) if price_change_5d else None,
                 "price_change_20d": round(price_change_20d, 2) if price_change_20d else None,
+
+                # 가격 구조 (지지/저항·스윙추세·매물대) — 패턴 추론 재료
+                **structure,
             }
             
         except Exception as e:
@@ -184,6 +190,62 @@ class TechnicalAgent(BaseAgent):
             return "약세"
         else:
             return "과매도 (반등 가능성)"
+
+    def _analyze_structure(self, df, current_price: float) -> Dict[str, Any]:
+        """가격 구조 분석 — 스윙 고/저점, 지지/저항, 고점·저점 추세, 매물대(volume profile)."""
+        high, low, close, vol = df["High"], df["Low"], df["Close"], df["Volume"]
+        n = len(df)
+        w = 5  # 프랙탈 윈도우 (±5봉 중 극값)
+        sh, sl = [], []
+        for i in range(w, n - w):
+            if high.iloc[i] == high.iloc[i - w:i + w + 1].max():
+                sh.append(float(high.iloc[i]))
+            if low.iloc[i] == low.iloc[i - w:i + w + 1].min():
+                sl.append(float(low.iloc[i]))
+
+        supports = sorted([p for p in sl if p < current_price], reverse=True)
+        resistances = sorted([p for p in sh if p > current_price])
+
+        def _seq_trend(vals):
+            v = vals[-3:]
+            if len(v) < 2:
+                return "데이터 부족"
+            if all(v[k] < v[k + 1] for k in range(len(v) - 1)):
+                return "상승(높여감)"
+            if all(v[k] > v[k + 1] for k in range(len(v) - 1)):
+                return "하락(낮춰감)"
+            return "혼조"
+
+        high_52w, low_52w = float(high.max()), float(low.min())
+
+        # 매물대 (volume profile): 가격대 20버킷 거래량 집계
+        nodes, poc = [], None
+        if high_52w > low_52w:
+            nb = 20
+            bucket = (high_52w - low_52w) / nb
+            vols = np.zeros(nb)
+            for c, v in zip(close.values, vol.values):
+                bi = min(int((c - low_52w) / bucket), nb - 1)
+                vols[bi] += v
+            total = vols.sum() or 1
+            for bi in sorted(np.argsort(vols)[::-1][:3]):
+                lo = low_52w + bi * bucket
+                nodes.append({"low": round(lo, 2), "high": round(lo + bucket, 2),
+                              "vol_pct": round(vols[bi] / total * 100, 1)})
+            poc_bi = int(np.argmax(vols))
+            poc = round(low_52w + (poc_bi + 0.5) * bucket, 2)
+
+        return {
+            "support": round(supports[0], 2) if supports else None,
+            "resistance": round(resistances[0], 2) if resistances else None,
+            "low_trend": _seq_trend(sl),
+            "high_trend": _seq_trend(sh),
+            "high_52w": round(high_52w, 2), "low_52w": round(low_52w, 2),
+            "pct_from_52w_high": round((current_price / high_52w - 1) * 100, 1) if high_52w else None,
+            "recent_swing_highs": [round(p, 2) for p in sh][-4:],
+            "recent_swing_lows": [round(p, 2) for p in sl][-4:],
+            "volume_nodes": nodes, "poc": poc,
+        }
     
     def generate_analysis(self, indicators: Dict[str, Any], temperature: float = 0.3, query: str = "") -> str:
         """
@@ -215,6 +277,9 @@ class TechnicalAgent(BaseAgent):
 - 구체적 숫자 기반 설명
 - 단정적이지 않되, 명확한 방향성 제시
 - 초보자도 이해할 수 있게 쉽게 설명"""
+
+        _vn = indicators.get("volume_nodes") or []
+        vol_nodes_str = ", ".join(f"${x['low']}~${x['high']}({x['vol_pct']}%)" for x in _vn) or "N/A"
 
         user_prompt = f"""다음 기술적 지표를 분석해줘:
 
@@ -249,11 +314,21 @@ class TechnicalAgent(BaseAgent):
 
 **변동성**: {indicators['volatility']}% (연간)
 
-위 지표를 바탕으로:
+**가격 구조 (패턴 분석용)**:
+- 최근 스윙 고점: {indicators.get('recent_swing_highs')}
+- 최근 스윙 저점: {indicators.get('recent_swing_lows')}
+- 고점 추세: {indicators.get('high_trend')} / 저점 추세: {indicators.get('low_trend')}
+- 가까운 지지: ${indicators.get('support')} / 가까운 저항: ${indicators.get('resistance')}
+- 52주: 고 ${indicators.get('high_52w')} / 저 ${indicators.get('low_52w')} (현재가는 고점 대비 {indicators.get('pct_from_52w_high')}%)
+- 매물대(거래량 밀집 가격대): {vol_nodes_str} · POC(최대 매물) ${indicators.get('poc')}
+
+위 지표·구조를 바탕으로:
 1. 현재 차트 상태 진단
 2. 매수/매도/관망 중 추천 행동
-3. 주요 가격대 (지지선, 저항선)
+3. 주요 가격대 (지지선·저항선·매물대 활용)
 4. 주의사항
+5. **차트 패턴 추론**: 위 스윙 고/저점 구조를 보고 헤드앤숄더·쌍바닥/쌍봉·플래그/페넌트·삼각수렴·추세채널(상승/하락) 중 보이는 패턴을 식별. 각 패턴에 **확신도(높음/중간/낮음)** 를 붙이고, **"지표 기반 추론이라 단정 불가"** 임을 반드시 명시. 뚜렷한 게 없으면 "뚜렷한 패턴 없음"이라고 솔직히.
+6. **매물대 해석**: 거래량 밀집 가격대를 지지/저항·돌파 관점에서.
 
 특히 다음 사용자의 질문이나 요구사항에 집중해서 답변해줘:
 사용자 요청: "{query if query else '전반적인 기술적 분석을 해줘.'}"
