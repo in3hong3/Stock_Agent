@@ -274,6 +274,17 @@ def compose_front_page_search(
             return f"- {h['name']} ({h['ticker']}): 현재가 {cur:,.2f}"
         return f"- {h['name']} ({h['ticker']}): 가격 데이터 없음"
 
+    # CSV에 저장된 현재가가 오래/잘못된 값(예: $600)일 수 있어, 발행 직전 실시간 시세로 갱신.
+    # (신문·카톡 브리핑이 이 블록을 그라운드 트루스로 쓰므로 여기서 바로잡으면 둘 다 정상화)
+    import yfinance as yf
+    for _h in holdings:
+        try:
+            _last = yf.Ticker(_h["ticker"]).fast_info.get("lastPrice")
+            if _last and float(_last) > 0:
+                _h["current_price"] = float(_last)
+        except Exception:
+            pass
+
     holdings_block = "\n".join(_h_line(h) for h in holdings) or "(보유 종목 없음)"
     macro_text = "\n".join(
         f"- {m['name']}: {m['value_str']} ({m['change_pct']:+.2f}%)"
