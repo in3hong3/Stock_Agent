@@ -339,55 +339,62 @@ def render_tab_tracker():
 
 
     # ── 4. 이슈 브리핑 (원하는 종목만 선택, 복수 가능) ──
+    # 종목 토글(st.pills) 시 페이지 전체가 rerun되며 회색 막이 길게 뜨던 것을 막기 위해
+    # 이 블록만 @st.fragment로 격리 → 토글/브리핑이 이 박스 안에서만 갱신된다.
     st.markdown("---")
-    st.caption("브리핑할 종목 (탭해서 켜고 끄기 · 기본 전체)")
-    sel_tickers = st.pills(
-        "브리핑할 종목",
-        options=tickers,
-        selection_mode="multi",
-        default=tickers,
-        key="brief_tickers",
-        label_visibility="collapsed",
-    )
-    bc1, bc2 = st.columns([1, 1])
-    with bc1:
-        brief_clicked = st.button("🤖 선택 종목 이슈 브리핑 생성", type="primary", use_container_width=True)
-    with bc2:
-        if st.button("🔄 시세/뉴스 새로고침", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
 
-    @st.cache_data(ttl=600)
-    def cached_news(ticker):
-        return fetch_ticker_news(ticker, max_news=6)
+    @st.fragment
+    def _issue_briefing():
+        st.caption("브리핑할 종목 (탭해서 켜고 끄기 · 기본 전체)")
+        sel_tickers = st.pills(
+            "브리핑할 종목",
+            options=tickers,
+            selection_mode="multi",
+            default=tickers,
+            key="brief_tickers",
+            label_visibility="collapsed",
+        )
+        bc1, bc2 = st.columns([1, 1])
+        with bc1:
+            brief_clicked = st.button("🤖 선택 종목 이슈 브리핑 생성", type="primary", use_container_width=True)
+        with bc2:
+            if st.button("🔄 시세/뉴스 새로고침", use_container_width=True):
+                st.cache_data.clear()
+                st.rerun(scope="app")  # 시세 등 페이지 전체 갱신은 앱 전체 rerun
 
-    if brief_clicked:
-        if not sel_tickers:
-            st.warning("브리핑할 종목을 1개 이상 선택하세요.")
-        else:
-            from utils.loading import ProgressBanner
-            try:
-                with ProgressBanner(
-                    title="이슈 브리핑 생성 중",
-                    total=3, icon="🤖",
-                ) as banner:
-                    banner.step(f"📰 {len(sel_tickers)}개 종목 뉴스 수집 중...")
-                    holdings_news = {t: cached_news(t) for t in sel_tickers}
-                    banner.step("✍️ AI가 종목별 이슈 분석 중...")
-                    briefing = summarize_all_issues(holdings_news)
-                    banner.step("📋 브리핑 정리 중...")
-                    banner.done("✅ 브리핑 생성 완료!")
-                st.session_state.tracker_briefing = {
-                    "text": briefing,
-                    "time": datetime.datetime.now().strftime("%H:%M"),
-                }
-            except Exception as e:
-                st.error(f"❌ 브리핑 생성 실패: {e}")
+        @st.cache_data(ttl=600)
+        def cached_news(ticker):
+            return fetch_ticker_news(ticker, max_news=6)
 
-    if st.session_state.get("tracker_briefing"):
-        b = st.session_state.tracker_briefing
-        st.markdown(f"#### 📋 이슈 브리핑 <span style='font-size:0.8rem;color:#64748B;'>(생성: {b['time']})</span>", unsafe_allow_html=True)
-        st.markdown(b["text"])
+        if brief_clicked:
+            if not sel_tickers:
+                st.warning("브리핑할 종목을 1개 이상 선택하세요.")
+            else:
+                from utils.loading import ProgressBanner
+                try:
+                    with ProgressBanner(
+                        title="이슈 브리핑 생성 중",
+                        total=3, icon="🤖",
+                    ) as banner:
+                        banner.step(f"📰 {len(sel_tickers)}개 종목 뉴스 수집 중...")
+                        holdings_news = {t: cached_news(t) for t in sel_tickers}
+                        banner.step("✍️ AI가 종목별 이슈 분석 중...")
+                        briefing = summarize_all_issues(holdings_news)
+                        banner.step("📋 브리핑 정리 중...")
+                        banner.done("✅ 브리핑 생성 완료!")
+                    st.session_state.tracker_briefing = {
+                        "text": briefing,
+                        "time": datetime.datetime.now().strftime("%H:%M"),
+                    }
+                except Exception as e:
+                    st.error(f"❌ 브리핑 생성 실패: {e}")
+
+        if st.session_state.get("tracker_briefing"):
+            b = st.session_state.tracker_briefing
+            st.markdown(f"#### 📋 이슈 브리핑 <span style='font-size:0.8rem;color:#64748B;'>(생성: {b['time']})</span>", unsafe_allow_html=True)
+            st.markdown(b["text"])
+
+    _issue_briefing()
 
     # ── 🎤 유튜버 집단지성 (RAG 대본 데이터 집계, LLM 0) ──
     st.markdown("---")
