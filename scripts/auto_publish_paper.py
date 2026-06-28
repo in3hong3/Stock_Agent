@@ -44,10 +44,22 @@ def publish_for_user(user_id: str) -> dict:
     filings = get_sec_filings(tickers)
     result = publish_daily_paper(macro, news, filings, holdings=holdings)
 
+    # ── LLM 출력 검증 (로드맵 #3): 본문 '현재가 단언'이 실제가와 5%↑ 빗나가면 경고 ──
+    # 비차단 — 경고만 로그로 남기고 발행은 그대로. (holdings는 발행 중 실시간가로 갱신됨)
+    validation = {"ok": True, "warnings": []}
+    try:
+        from modules.llm_validator import validate_paper
+        validation = validate_paper(result, holdings)
+        if not validation["ok"]:
+            print(f"  [{user_id}] {validation['summary']}")
+    except Exception as e:
+        print(f"  [{user_id}] ⚠️ 검증 단계 오류(무시하고 진행): {e}")
+
     return {
         "user": user_id,
         "status": result.get("status"),
         "engine": result.get("engine"),
+        "price_warnings": len(validation["warnings"]),
     }
 
 
