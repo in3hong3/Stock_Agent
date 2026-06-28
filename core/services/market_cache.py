@@ -28,6 +28,7 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 CACHE_DIR = os.path.join(_BASE_DIR, "data", "cache")
 HIST_DIR = os.path.join(CACHE_DIR, "history")
 INFO_DIR = os.path.join(CACHE_DIR, "info")
+NEWS_DIR = os.path.join(CACHE_DIR, "news")
 META_PATH = os.path.join(CACHE_DIR, "_meta.json")
 
 # 캐시 신선도: 마지막 수집 후 이 시간(h)이 지나면 stale → 라이브 fallback.
@@ -189,15 +190,93 @@ def get_info(ticker: str, force_live: bool = False) -> Dict:
         return {}
 
 
+# ──────────────────────────────────────────────
+# 뉴스 (누적 + 중복제거)
+#   주가/info와 달리 덮어쓰지 않고 link 기준으로 새 기사만 더해 쌓는다.
+#   → 종목별 뉴스 타임라인이 누적됨. (보관기간 제한은 추후 DB 비대 시 도입)
+# ──────────────────────────────────────────────
+def _news_path(ticker: str) -> str:
+    return os.path.join(NEWS_DIR, f"{_safe_name(ticker)}.json")
+
+
+def _news_key(item: Dict) -> Optional[str]:
+    link = item.get("link")
+    if link and link != "#":
+        return link
+    return item.get("title") or None
+
+
+def _load_news(ticker: str) -> list:
+    path = _news_path(ticker)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                items = json.load(f)
+            return items if isinstance(items, list) else []
+        except Exception:
+            return []
+    return []
+
+
+def save_news(ticker: str, new_items: list) -> list:
+    """새 기사만 골라 기존 더미에 합치고 저장. 합쳐진 전체 리스트를 반환.
+    중복 기준 = link(없으면 title). 기존 항목 우선 보존(최초 수집 시점 유지)."""
+    existing = _load_news(ticker)
+    by_key: Dict[str, Dict] = {}
+    for it in existing + list(new_items or []):  # 기존이 먼저 → 중복 시 기존 유지
+        k = _news_key(it)
+        if k:
+            by_key.setdefault(k, it)
+    merged = sorted(by_key.values(), key=lambda n: n.get("published", ""), reverse=True)
+    try:
+        os.makedirs(NEWS_DIR, exist_ok=True)
+        tmp = _news_path(ticker) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(merged, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, _news_path(ticker))
+        _touch_meta(ticker, "news_at")
+    except Exception as e:
+        logger.warning(f"news 저장 실패 ({ticker}): {e}")
+    return merged
+
+
+def _fetch_news_live(ticker: str, max_news: int = 10) -> list:
+    try:
+        from agents.news_agent import NewsAgent
+        return NewsAgent().fetch_news(ticker, max_news=max_news)
+    except Exception as e:
+        logger.warning(f"news 라이브 실패 ({ticker}): {e}")
+        return []
+
+
+def get_news(ticker: str, max_items: int = 10, force_live: bool = False) -> list:
+    """누적된 종목 뉴스. 신선한 캐시가 있으면 그대로, 없거나(콜드/stale) force_live면
+    라이브로 새 기사를 받아 누적 더미에 합친 뒤 최신순 상위 max_items 반환."""
+    items = _load_news(ticker)
+    if force_live or not items or not _is_fresh(ticker, "news_at"):
+        fresh = _fetch_news_live(ticker)
+        if fresh:
+            items = save_news(ticker, fresh)
+    items = sorted(items, key=lambda n: n.get("published", ""), reverse=True)
+    return items[:max_items] if max_items else items
+
+
 def cache_status() -> Dict:
     """캐시 현황 요약 (모니터링/디버깅용)."""
     meta = _load_meta()
     fresh_h = sum(1 for t in meta if _is_fresh(t, "history_at"))
     fresh_i = sum(1 for t in meta if _is_fresh(t, "info_at"))
+    news_tickers = sum(1 for t in meta if "news_at" in meta.get(t, {}))
+    news_total = 0
+    if os.path.isdir(NEWS_DIR):
+        for t in meta:
+            news_total += len(_load_news(t))
     return {
         "tickers": len(meta),
         "fresh_history": fresh_h,
         "fresh_info": fresh_i,
+        "news_tickers": news_tickers,
+        "news_articles": news_total,
         "max_age_hours": MAX_AGE_HOURS,
         "cache_dir": CACHE_DIR,
     }

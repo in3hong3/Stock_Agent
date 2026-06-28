@@ -64,7 +64,11 @@
   - **구현**: `core/services/market_cache.py`(parquet 캐시 + 투명 라이브 fallback) +
     `scripts/collect_market_data.py`(새벽 cron, 전 사용자 보유/관심/추적+지수 수집).
     trade_signal의 history/info/지수 호출을 캐시 경유로 전환 → analyze_stock 3.5s→0.14s.
-    캐시 콜드 시 기존과 100% 동일 동작(안전). 뉴스/공시 사전수집은 후속 과제로 남김.
+    캐시 콜드 시 기존과 100% 동일 동작(안전).
+  - **뉴스 사전수집 추가(2026-06-28)**: market_cache.get_news — 종목별 뉴스를 덮어쓰지 않고
+    link 기준 **누적+중복제거**로 쌓음(타임라인). issue_tracker.fetch_ticker_news가 캐시 경유,
+    force_live=True로 '지금 새로고침'. 읽기 130배↑(2.3s→0.02s). 보관기간 제한은 DB 비대 시 도입.
+  - **남은 후속**: 공시(SEC EDGAR/실적일정) 사전수집 — 스마트머니 추적 항목과 묶어 진행.
 - [ ] **3순위 — LLM 평가 하네스** (규모 중)
   - 데일리신문·스코어링·AI평가가 헛소리(환각·옛 가격)인지 자동 검사
   - 예: '데일리에 적힌 가격이 yfinance 실제가와 ±5% 넘게 다르면 경고/재생성'

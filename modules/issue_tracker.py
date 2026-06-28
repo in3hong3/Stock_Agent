@@ -253,11 +253,12 @@ def get_snapshot(holdings: List[Dict[str, Any]]) -> pd.DataFrame:
 # ──────────────────────────────────────────────
 # 이슈(뉴스) 수집 및 AI 요약
 # ──────────────────────────────────────────────
-def fetch_ticker_news(ticker: str, max_news: int = 6) -> List[Dict[str, Any]]:
-    """NewsAgent 재사용 (yfinance 신/구 포맷 모두 대응)"""
-    from agents.news_agent import NewsAgent
-    agent = NewsAgent.__new__(NewsAgent)  # LLM 클라이언트 초기화 없이 fetch만 사용
-    return NewsAgent.fetch_news(agent, ticker, max_news)
+def fetch_ticker_news(ticker: str, max_news: int = 6,
+                      force_live: bool = False) -> List[Dict[str, Any]]:
+    """누적 뉴스 캐시 경유 (새벽 cron이 미리 수집 → 즉시 읽기, 콜드/stale 시 라이브).
+    force_live=True면 '지금 새로고침' — 라이브로 새 기사를 받아 누적 더미에 합친다."""
+    from core.services.market_cache import get_news
+    return get_news(ticker, max_items=max_news, force_live=force_live)
 
 
 def summarize_all_issues(holdings_news: Dict[str, List[Dict]], model: str = "gpt-4.1") -> str:

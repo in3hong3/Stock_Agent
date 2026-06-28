@@ -85,7 +85,7 @@ def collect(delay: float = 0.4):
     print(f"  대상 종목: {len(universe)}개")
     print(f"  {', '.join(universe)}\n")
 
-    ok_hist = ok_info = fail = 0
+    ok_hist = ok_info = ok_news = fail = 0
     for i, ticker in enumerate(universe, 1):
         try:
             tk = yf.Ticker(ticker)
@@ -96,15 +96,22 @@ def collect(delay: float = 0.4):
             else:
                 tag = "∅ "
 
-            # 지수/환율은 .info가 비거나 무의미 → 히스토리만 캐시
-            info_tag = ""
+            # 지수/환율은 .info/뉴스가 비거나 무의미 → 히스토리만 캐시
+            info_tag = news_tag = ""
             if not (ticker.startswith("^") or ticker.endswith("=X")):
                 info = tk.info
                 if info and market_cache.save_info(ticker, info):
                     ok_info += 1
                     info_tag = "💼"
 
-            print(f"  [{i:>2}/{len(universe)}] {tag}{info_tag} {ticker}")
+                # 뉴스: 누적 더미에 새 기사만 합침 (덮어쓰지 않음)
+                news = market_cache._fetch_news_live(ticker)
+                if news:
+                    merged = market_cache.save_news(ticker, news)
+                    ok_news += 1
+                    news_tag = f"📰{len(merged)}"
+
+            print(f"  [{i:>2}/{len(universe)}] {tag}{info_tag}{news_tag} {ticker}")
         except Exception as e:
             fail += 1
             print(f"  [{i:>2}/{len(universe)}] ❌ {ticker}: {e}")
@@ -114,11 +121,12 @@ def collect(delay: float = 0.4):
 
     elapsed = (datetime.datetime.now() - start).seconds
     print("\n" + "=" * 56)
-    print(f"  ✅ 완료 — history {ok_hist} · info {ok_info} · 실패 {fail} "
+    print(f"  ✅ 완료 — history {ok_hist} · info {ok_info} · news {ok_news} · 실패 {fail} "
           f"({elapsed // 60}분 {elapsed % 60}초)")
     print(f"  캐시 현황: {market_cache.cache_status()}")
     print("=" * 56)
-    return {"history": ok_hist, "info": ok_info, "fail": fail, "total": len(universe)}
+    return {"history": ok_hist, "info": ok_info, "news": ok_news,
+            "fail": fail, "total": len(universe)}
 
 
 if __name__ == "__main__":
