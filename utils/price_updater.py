@@ -303,6 +303,52 @@ class PriceUpdater:
         return prices
 
 
+def refresh_portfolio_from_cache(user_id: str = None) -> Dict[str, any]:
+    """사용자 포트폴리오 CSV의 current_price를 market_cache 종가로 갱신/저장.
+    추가 yfinance 호출 없이(캐시 우선) 새벽 cron이 호출 → 버튼 없이도 현재가가 최신 유지.
+    current_price 컬럼만 건드리고 ticker/quantity/avg_price는 보존(사용자 편집 보호)."""
+    from utils.user_data import portfolio_path
+    from core.services.market_cache import get_history
+
+    path = portfolio_path(user_id)
+    if not os.path.exists(path):
+        return {"user": user_id, "skipped": "포트폴리오 없음"}
+
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        return {"user": user_id, "error": str(e)}
+
+    if "current_price" not in df.columns or "ticker" not in df.columns:
+        return {"user": user_id, "skipped": "컬럼 없음"}
+
+    updated, fixed = 0, []
+    for idx, row in df.iterrows():
+        ticker = str(row.get("ticker", "")).strip().upper()
+        if not ticker or ticker == "USD":
+            continue
+        try:
+            hist = get_history(ticker, "5d")
+            if hist is None or hist.empty:
+                continue
+            real = round(float(hist["Close"].iloc[-1]), 2)
+            old = float(row.get("current_price", 0) or 0)
+            if real > 0:
+                df.at[idx, "current_price"] = real
+                updated += 1
+                if old > 0 and abs(real / old - 1) > 0.05:  # 5%↑ 어긋났던 것 기록
+                    fixed.append(f"{ticker} {old:,.2f}→{real:,.2f}")
+        except Exception:
+            continue
+
+    try:
+        df.to_csv(path, index=False, encoding="utf-8-sig")
+    except Exception as e:
+        return {"user": user_id, "error": f"저장 실패: {e}"}
+
+    return {"user": user_id, "updated": updated, "fixed": fixed}
+
+
 # CLI 사용 예시
 if __name__ == "__main__":
     import sys

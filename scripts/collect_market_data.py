@@ -131,6 +131,23 @@ def collect(delay: float = 0.4):
         if i < len(universe):
             time.sleep(delay)
 
+    # ── 수집 후: 전 사용자 포트폴리오 현재가를 캐시 종가로 갱신 ──
+    # (버튼 안 눌러도 평가액·수익률이 매일 자동으로 맞게 유지)
+    print("\n  💰 포트폴리오 현재가 갱신")
+    from utils.price_updater import refresh_portfolio_from_cache
+    for udir in glob.glob(os.path.join(_USERS_DIR, "*")):
+        if not os.path.isdir(udir):
+            continue
+        uid = os.path.basename(udir)
+        try:
+            res = refresh_portfolio_from_cache(uid)
+            if res.get("fixed"):
+                print(f"     [{uid}] {res['updated']}종목 갱신 · 교정: {', '.join(res['fixed'])}")
+            elif res.get("updated"):
+                print(f"     [{uid}] {res['updated']}종목 갱신")
+        except Exception as e:
+            print(f"     [{uid}] 갱신 실패: {e}")
+
     elapsed = (datetime.datetime.now() - start).seconds
     print("\n" + "=" * 56)
     print(f"  ✅ 완료 — history {ok_hist} · info {ok_info} · news {ok_news} · "
