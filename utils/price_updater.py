@@ -2,6 +2,7 @@
 실시간 주가 업데이트 모듈
 yfinance를 사용하여 포트폴리오의 현재가를 자동으로 업데이트
 """
+import os
 import yfinance as yf
 import pandas as pd
 import logging
