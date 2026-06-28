@@ -24,5 +24,9 @@
 # 4) 카카오 데일리 브리핑 — KST 월~금 08:00 (UTC 일~목 23:00 → 요일 0-4 주의!)
 0 23 * * 0-4 cd /home/ubuntu/stock-agent && STOCK_AGENT_USER=admin .venv/bin/python scripts/daily_kakao_briefing.py >> logs/kakao_briefing.log 2>&1
 
+# 5) 운영 모니터링 — KST 08:30 (UTC 23:30, 아침 잡들 끝난 직후 → 수집/발행 실패 감지)
+#       서버·cron·yfinance·검색LLM·카카오·캐시디스크 점검, 이상 시에만 카카오 1회 알림.
+30 23 * * * cd /home/ubuntu/stock-agent && .venv/bin/python scripts/health_check.py >> logs/health.log 2>&1
+
 # 로그 정리 (매주 일요일, 30일 이상된 로그 삭제)
 0 0 * * 0 find /home/ubuntu/stock-agent/logs -name "*.log" -mtime +30 -delete
