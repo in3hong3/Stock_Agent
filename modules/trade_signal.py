@@ -244,9 +244,19 @@ def get_market_regime() -> Dict[str, Any]:
     fng = None
     try:
         import requests
+        # CNN dataviz API는 봇 차단(HTTP 418)이 있어 브라우저 수준 헤더가 모두 필요하다.
+        # (UA·Referer만으론 418 — Accept/Accept-Language/Origin까지 있어야 200.
+        #  main.CNNScraper / ui.theme와 동일한 헤더 세트)
         r = requests.get(
             "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
-            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://edition.cnn.com/"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Origin": "https://edition.cnn.com",
+                "Referer": "https://edition.cnn.com/",
+            },
             timeout=5,
         )
         if r.status_code == 200:
