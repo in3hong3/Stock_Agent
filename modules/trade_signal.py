@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from core.services.market_cache import get_history, get_info
+
 
 # ──────────────────────────────────────────────
 # 0. 보조 지표 계산
@@ -63,8 +65,10 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
     score: 양수=저평가(매수우위), 음수=고평가(매수신중)
     """
     try:
-        info = yf.Ticker(ticker).info
+        info = get_info(ticker)
     except Exception:
+        return {"verdict": "평가불가", "score": 0, "note": "데이터 조회 실패"}
+    if not info:
         return {"verdict": "평가불가", "score": 0, "note": "데이터 조회 실패"}
 
     trailing_pe = info.get("trailingPE")
@@ -183,7 +187,7 @@ def get_market_regime() -> Dict[str, Any]:
 
     vix = None
     try:
-        h = yf.Ticker("^VIX").history(period="5d")
+        h = get_history("^VIX", period="5d")
         if not h.empty:
             vix = float(h["Close"].iloc[-1])
             if vix < 15:
@@ -215,7 +219,7 @@ def get_market_regime() -> Dict[str, Any]:
         pass
 
     try:
-        h = yf.Ticker("^GSPC").history(period="3mo")
+        h = get_history("^GSPC", period="3mo")
         if len(h) >= 50:
             spx = float(h["Close"].iloc[-1])
             ma50 = float(h["Close"].rolling(50).mean().iloc[-1])
@@ -241,7 +245,7 @@ def get_market_regime() -> Dict[str, Any]:
 # 2. 종목 분석 — 멀티 타임프레임 + 셋업 인식
 # ──────────────────────────────────────────────
 def analyze_stock(ticker: str, quantity: float = 0, avg_price: float = 0) -> Dict[str, Any]:
-    df = yf.Ticker(ticker).history(period="1y")
+    df = get_history(ticker, period="1y")
     if df.empty or len(df) < 60:
         return {"ticker": ticker, "error": "데이터 부족"}
 

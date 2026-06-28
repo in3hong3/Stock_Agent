@@ -1,0 +1,125 @@
+"""
+collect_market_data.py — 시장 데이터 사전 수집 하네스 (로드맵 #2)
+
+새벽 cron이 1회 실행. 모든 사용자의 보유/관심/추적 종목 + 시장지표를
+yfinance로 한 번에 긁어 data/cache/ 에 저장한다.
+
+이후 페이지/시그널은 market_cache.get_history/get_info 로 캐시를 즉시 읽어
+yfinance 라이브 호출(느림·차단 위험)을 피한다.
+
+cron (KST 06:30 = UTC 21:30, 평일 — 미 증시 마감 후):
+  30 21 * * 1-5 cd ~/stock-agent && .venv/bin/python scripts/collect_market_data.py >> logs/collect_market.log 2>&1
+"""
+import os
+import sys
+import csv
+import glob
+import json
+import time
+import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import yfinance as yf
+from core.services import market_cache
+
+_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_USERS_DIR = os.path.join(_BASE, "data", "users")
+
+# 시장 국면 판단에 항상 필요한 지표/환율
+MARKET_TICKERS = ["^VIX", "^GSPC", "KRW=X"]
+
+
+def _read_portfolio_tickers(path: str) -> set:
+    out = set()
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                t = (row.get("ticker") or "").strip().upper()
+                if t and t != "USD":
+                    out.add(t)
+    except Exception as e:
+        print(f"  ⚠️ {path} 읽기 실패: {e}")
+    return out
+
+
+def _read_json_tickers(path: str) -> set:
+    out = set()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            items = json.load(f)
+        for it in items if isinstance(items, list) else []:
+            t = (it.get("ticker") or "").strip().upper()
+            if t and t != "USD":
+                out.add(t)
+    except Exception as e:
+        print(f"  ⚠️ {path} 읽기 실패: {e}")
+    return out
+
+
+def gather_universe() -> list:
+    """모든 사용자의 보유/관심/추적 종목 + 시장지표를 모은 티커 집합."""
+    tickers = set(MARKET_TICKERS)
+
+    for udir in glob.glob(os.path.join(_USERS_DIR, "*")):
+        if not os.path.isdir(udir):
+            continue
+        pf = os.path.join(udir, "portfolio.csv")
+        if os.path.exists(pf):
+            tickers |= _read_portfolio_tickers(pf)
+        for name in ("watchlist.json", "tracked_tickers.json"):
+            jf = os.path.join(udir, name)
+            if os.path.exists(jf):
+                tickers |= _read_json_tickers(jf)
+
+    return sorted(tickers)
+
+
+def collect(delay: float = 0.4):
+    start = datetime.datetime.now()
+    print("=" * 56)
+    print(f"  📦 시장 데이터 수집 시작 — {start.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 56)
+
+    universe = gather_universe()
+    print(f"  대상 종목: {len(universe)}개")
+    print(f"  {', '.join(universe)}\n")
+
+    ok_hist = ok_info = fail = 0
+    for i, ticker in enumerate(universe, 1):
+        try:
+            tk = yf.Ticker(ticker)
+            df = tk.history(period=market_cache.COLLECT_PERIOD)
+            if df is not None and not df.empty and market_cache.save_history(ticker, df):
+                ok_hist += 1
+                tag = "📈"
+            else:
+                tag = "∅ "
+
+            # 지수/환율은 .info가 비거나 무의미 → 히스토리만 캐시
+            info_tag = ""
+            if not (ticker.startswith("^") or ticker.endswith("=X")):
+                info = tk.info
+                if info and market_cache.save_info(ticker, info):
+                    ok_info += 1
+                    info_tag = "💼"
+
+            print(f"  [{i:>2}/{len(universe)}] {tag}{info_tag} {ticker}")
+        except Exception as e:
+            fail += 1
+            print(f"  [{i:>2}/{len(universe)}] ❌ {ticker}: {e}")
+
+        if i < len(universe):
+            time.sleep(delay)
+
+    elapsed = (datetime.datetime.now() - start).seconds
+    print("\n" + "=" * 56)
+    print(f"  ✅ 완료 — history {ok_hist} · info {ok_info} · 실패 {fail} "
+          f"({elapsed // 60}분 {elapsed % 60}초)")
+    print(f"  캐시 현황: {market_cache.cache_status()}")
+    print("=" * 56)
+    return {"history": ok_hist, "info": ok_info, "fail": fail, "total": len(universe)}
+
+
+if __name__ == "__main__":
+    collect()
