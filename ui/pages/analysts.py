@@ -347,6 +347,103 @@ def render_tab_comprehensive():
         st.info("👆 위에서 체크박스를 선택하고 질문을 입력하세요!")
 
 
+def _entry_explanation(r, score, buy_th, sell_th):
+    """진입 점검 결과 → 자세한 자연어 해석 (규칙 기반·토큰 0).
+    Returns: (story_lines, plan_words, flip_lines)"""
+    val = r.get("valuation", {})
+    rsi = r.get("rsi")
+    price = r.get("price")
+    ma50 = r.get("ma50")
+    support = r.get("support")
+    resistance = r.get("resistance")
+
+    # ── 1) 종합 해석 (축별 한 줄씩) ──
+    story = []
+    tr, wk = r.get("trend_regime", ""), r.get("wk_trend", "")
+    if isinstance(rsi, (int, float)):
+        if rsi >= 72:
+            t = f"RSI {rsi:.0f} — 단기 과열권(달아오른 상태)"
+        elif rsi <= 32:
+            t = f"RSI {rsi:.0f} — 과매도권(통계적 저점, 반등 노릴 자리)"
+        elif rsi <= 50:
+            t = f"RSI {rsi:.0f} — 눌려 있는 상태(과열 식음)"
+        else:
+            t = f"RSI {rsi:.0f} — 중립~강세 구간"
+        story.append(f"**📈 타이밍** — {t}. 주봉은 **{wk or '중립'}추세**, ADX {r.get('adx','?')}라 **{tr}**입니다.")
+
+    verdict = val.get("verdict")
+    if verdict and verdict != "평가불가":
+        # 밸류 고유 지표만 (EPS·기관·내부자는 아래 전용 줄에 별도 표기 → 중복 방지)
+        vbits = []
+        if isinstance(val.get("peg"), (int, float)):
+            vbits.append(f"PEG {val['peg']:.2f}{' (저평가)' if val['peg'] < 1 else ''}")
+        if isinstance(val.get("forward_pe"), (int, float)):
+            vbits.append(f"선행PER {val['forward_pe']:.0f}")
+        if isinstance(val.get("upside"), (int, float)):
+            vbits.append(f"애널 목표가 {val['upside']:+.0f}% 여력")
+        story.append(f"**🏷️ 밸류에이션** — **{verdict}**" + (f" ({' · '.join(vbits)})" if vbits else "") + ".")
+
+    eps = val.get("eps_growth")
+    if isinstance(eps, (int, float)):
+        eng = "강한 엔진(과열도 견딤)" if eps >= 15 else ("완만한 성장" if eps >= 0 else "역성장(엔진 둔화)")
+        story.append(f"**⚙️ 실적 엔진** — 최근 EPS 성장 **{eps:+.0f}%** — {eng}.")
+
+    # 스마트머니 (기관·내부자)
+    sm = []
+    inst = val.get("inst_pct")
+    if isinstance(inst, (int, float)):
+        chg = val.get("inst_change_pp")
+        if isinstance(chg, (int, float)) and abs(chg) >= 0.5:
+            sm.append(f"기관 보유 {inst:.0f}% (최근 **{chg:+.1f}%p {'증가 — 모으는 중' if chg > 0 else '감소 — 줄이는 중'}**)")
+        else:
+            sm.append(f"기관 보유 {inst:.0f}% (변화 추세는 스냅샷 누적 중)")
+    nv = val.get("insider_net_value")
+    if val.get("insider_buying"):
+        sm.append(f"내부자 **순매수**{f' ${nv/1e6:.1f}M' if isinstance(nv,(int,float)) and nv else ''} — 강한 확신 신호")
+    elif isinstance(nv, (int, float)) and nv < 0:
+        sm.append("내부자는 순매도(다만 매도는 사유 다양해 약한 신호)")
+    if sm:
+        story.append("**🐋 스마트머니** — " + " · ".join(sm) + ".")
+
+    reg = r.get("regime", {})
+    if reg.get("detail"):
+        story.append(f"**🌐 시장국면** — {reg.get('label','')} ({' · '.join(reg['detail'][:2])}).")
+
+    # ── 2) 진입 플랜 말풀이 ──
+    plan_words = ""
+    if r.get("entry") and r.get("rr"):
+        entry, stop, target, rr = r["entry"], r["stop"], r["target"], r["rr"]
+        loss_pct = (stop / entry - 1) * 100
+        gain_pct = (target / entry - 1) * 100
+        rr_comment = ("손익비가 넉넉해 한 번 손절나도 한 번 성공이면 이득" if rr >= 2
+                      else "손익비가 1.5~2로 무난" if rr >= 1.5
+                      else "손익비가 빠듯해 진입 매력은 낮음")
+        plan_words = (
+            f"**{entry:,.2f}** 부근에서 분할 진입한다면, **{stop:,.2f}**(-{abs(loss_pct):.1f}%)에서 손절하고 "
+            f"**{target:,.2f}**(+{gain_pct:.1f}%)를 1차 목표로 봅니다. 손익비 **1:{rr}** — {rr_comment}. "
+            f"손절은 변동성(ATR) 기반이라 일시적 흔들림엔 버티되, 이 선이 깨지면 가설이 틀린 것이니 기계적으로 정리하세요."
+        )
+
+    # ── 3) 판단이 바뀌는 조건 ──
+    flips = []
+    if score >= buy_th:  # 현재 매수권
+        if isinstance(ma50, (int, float)):
+            flips.append(f"종가가 **MA50({ma50:,.2f}) 아래**로 마감하면 → 중기 추세 훼손, 비중 축소로 전환")
+        if isinstance(rsi, (int, float)) and rsi >= 70:
+            flips.append("**RSI 추가 과열 + MACD 히스토그램이 3봉 연속 줄어들면** → 익절 우선(에너지 약화 신호)")
+        if val.get("insider_buying") is False and isinstance(val.get("inst_change_pp"), (int, float)) and val["inst_change_pp"] < -1:
+            flips.append("**기관 보유율이 계속 감소**하면 → 스마트머니 이탈, 신중 모드")
+    else:  # 관망/비추권
+        if isinstance(support, (int, float)):
+            flips.append(f"**지지 {support:,.2f}** 부근에서 거래량 동반 반등 + RSI 회복 시 → 눌림목 진입 기회")
+        if isinstance(resistance, (int, float)):
+            flips.append(f"**저항 {resistance:,.2f}**을 거래량 동반해 돌파하면 → 모멘텀 진입 신호로 전환")
+        if val.get("verdict") == "고평가":
+            flips.append("밸류 부담이 큰 구간이라 — 실적 발표로 **EPS가 더 올라오면** 고평가가 해소될 수 있음")
+
+    return story, plan_words, flips
+
+
 def render_tab_entry_check():
     """🎯 진입 점검 — '이 종목 지금 사도 될까?'를 시그널 엔진으로 종합 판단."""
     st.header("🎯 진입 점검 — 지금 사도 될까?")
@@ -421,8 +518,15 @@ def render_tab_entry_check():
         unsafe_allow_html=True,
     )
 
-    # ── 3대 관점 ──
-    c1, c2, c3 = st.columns(3)
+    # ── 종합 해석 (자세한 자연어) ──
+    story, plan_words, flips = _entry_explanation(r, score, buy_th, sell_th)
+    if story:
+        st.markdown("#### 📖 종합 해석")
+        for line in story:
+            st.markdown(f"- {line}")
+
+    # ── 4대 관점 ──
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("📈 타이밍", f"RSI {r.get('rsi','?')}",
               help=f"MACD {r.get('macd_hist','?'):.2f} · ADX {r.get('adx','?')} {r.get('trend_regime','')} · 주봉 {r.get('wk_trend','')}추세")
     vmap = {"저평가": "🟢 저평가", "적정": "🟡 적정", "고평가": "🔴 고평가", "평가불가": "⚪ 평가불가"}
@@ -431,6 +535,17 @@ def render_tab_entry_check():
     eps = val.get("eps_growth")
     c3.metric("⚙️ 실적 엔진", f"EPS {eps:+.0f}%" if isinstance(eps, (int, float)) else "데이터 없음",
               help="EPS 성장 추세 — 강하면 과열에도 추세 유지 가능 (올랜도 킴식)")
+    # 스마트머니 — 내부자 순매수 우선, 없으면 기관 보유(변화)
+    inst_pct = val.get("inst_pct")
+    inst_chg = val.get("inst_change_pp")
+    if val.get("insider_buying"):
+        sm_val = "내부자 순매수 🟢"
+    elif isinstance(inst_pct, (int, float)):
+        sm_val = f"기관 {inst_pct:.0f}%" + (f" ({inst_chg:+.1f}%p)" if isinstance(inst_chg, (int, float)) and abs(inst_chg) >= 0.5 else "")
+    else:
+        sm_val = "데이터 없음"
+    c4.metric("🐋 스마트머니", sm_val,
+              help="기관 보유율 변화(13F) + 내부자 공개시장 매수(SEC Form 4) — '기관이 모으는가'")
 
     # ── 진입 플랜 ──
     if r.get("entry"):
@@ -440,11 +555,19 @@ def render_tab_entry_check():
         pc2.metric("손절가", f"{r['stop']:,.2f}", delta=f"{(r['stop']/r['entry']-1)*100:+.1f}%")
         pc3.metric("목표가", f"{r['target']:,.2f}", delta=f"{(r['target']/r['entry']-1)*100:+.1f}%")
         pc4.metric("손익비", f"1 : {r['rr']}")
+        if plan_words:
+            st.caption(plan_words)
     else:
         st.info(f"💡 {r.get('plan','명확한 진입 트리거가 없어 관망 구간입니다.')}")
 
+    # ── 판단이 바뀌는 조건 ──
+    if flips:
+        st.markdown("#### 🔄 이럴 때 판단이 바뀝니다")
+        for f in flips:
+            st.markdown(f"- {f}")
+
     # ── 판단 근거 ──
-    with st.expander("📋 판단 근거 상세", expanded=True):
+    with st.expander("📋 판단 근거 상세 (규칙 엔진 원문)", expanded=False):
         for pts, reason in r.get("reasons", []):
             st.markdown(f"- {pts} {reason}")
         for ex in r.get("extra", []):
