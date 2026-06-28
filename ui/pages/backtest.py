@@ -39,6 +39,44 @@ def render_tab_backtest():
 - 과거에 잘 맞았다고 미래에도 맞는 건 아니에요 (과최적화 함정). 슬리피지·세금·배당은 단순화돼 있습니다.
 """)
 
+    # ── 🎯 실제 시그널 백테스트 (앱의 매수 기법 과거 성과 = 트랙레코드) ──
+    st.markdown("### 🎯 실제 시그널 백테스트")
+    st.caption("내 종목 탭의 진짜 매수 기법(눌림목·돌파·과매도)을 과거 2년 매 거래일에 적용 → "
+               "이후 N일 실제 주가로 채점한 트랙레코드입니다.")
+    sb1, sb2 = st.columns([1, 1])
+    with sb1:
+        sb_horizon = st.selectbox("채점 보유기간", [5, 10, 20], index=1, key="sb_horizon",
+                                  format_func=lambda d: f"{d}일 후")
+    with sb2:
+        st.write("")
+        sb_run = st.button("🎯 시그널 백테스트 실행", type="primary", use_container_width=True, key="sb_run")
+    if sb_run:
+        from modules.signal_backtest import run_backtest as run_sig_bt
+        from modules.issue_tracker import get_portfolio_holdings
+        MAJORS = ["NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "META", "TSLA", "AMD", "AVGO", "MU",
+                  "PLTR", "INTC", "QCOM", "ASML", "ORCL", "CRM", "NFLX", "ARM", "DELL", "SNDK"]
+        held = [h["ticker"] for h in get_portfolio_holdings()]
+        universe = sorted(set(held) | set(MAJORS))
+        with st.spinner(f"{len(universe)}개 종목 × 2년 백테스트 중... (수십 초 소요)"):
+            st.session_state["sig_bt"] = run_sig_bt(universe, horizon=sb_horizon)
+    res = st.session_state.get("sig_bt")
+    if res and res.get("n"):
+        m1, m2, m3 = st.columns(3)
+        m1.metric("매수 신호 표본", f"{res['n']:,}건")
+        m2.metric("적중률", f"{res['overall_win']}%" if res["overall_win"] is not None else "—",
+                  help="적중(목표 도달) ÷ (적중+실패). 진행중 제외")
+        m3.metric("평균 수익", f"{res['avg_ret']:+.1f}%")
+        st.markdown("**셋업별 성과**")
+        for s, v in sorted(res["setup_stats"].items(), key=lambda x: -(x[1]["win_rate"] or 0)):
+            wr = f"{v['win_rate']}%" if v["win_rate"] is not None else "—"
+            st.markdown(f"- **{s}** — 적중률 {wr} · 평균 {v['avg_ret']:+.1f}% (표본 {v['n']}건)")
+        st.caption("※ 과거 펀더멘털(EPS)은 중립 처리·지지저항은 근사라 실제와 약간 차이. "
+                   "과거 성과가 미래를 보장하지 않습니다.")
+    elif res is not None:
+        st.info("백테스트 표본이 없습니다 (데이터 부족).")
+    st.markdown("---")
+    st.markdown("### 📐 단순 전략 백테스트")
+
     bc1, bc2, bc3, bc4 = st.columns([2, 3, 2, 2])
     with bc1:
         bt_ticker = st.text_input("티커", value="NVDA", key="bt_ticker").strip().upper()
