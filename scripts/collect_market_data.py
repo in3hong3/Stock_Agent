@@ -85,7 +85,7 @@ def collect(delay: float = 0.4):
     print(f"  대상 종목: {len(universe)}개")
     print(f"  {', '.join(universe)}\n")
 
-    ok_hist = ok_info = ok_news = fail = 0
+    ok_hist = ok_info = ok_news = ok_insider = fail = 0
     for i, ticker in enumerate(universe, 1):
         try:
             tk = yf.Ticker(ticker)
@@ -97,7 +97,7 @@ def collect(delay: float = 0.4):
                 tag = "∅ "
 
             # 지수/환율은 .info/뉴스가 비거나 무의미 → 히스토리만 캐시
-            info_tag = news_tag = ""
+            info_tag = news_tag = insider_tag = ""
             if not (ticker.startswith("^") or ticker.endswith("=X")):
                 info = tk.info
                 if info and market_cache.save_info(ticker, info):
@@ -112,7 +112,18 @@ def collect(delay: float = 0.4):
                     ok_news += 1
                     news_tag = f"📰{len(merged)}"
 
-            print(f"  [{i:>2}/{len(universe)}] {tag}{info_tag}{news_tag} {ticker}")
+                # 내부자 거래(SEC Form 4): EDGAR 라이브 수집 → 캐시 (느려서 cron에서만)
+                try:
+                    from modules.insider_tracker import get_insider_activity
+                    act = get_insider_activity(ticker, allow_live=True)
+                    if act.get("available"):
+                        ok_insider += 1
+                        net = act.get("net_value", 0)
+                        insider_tag = f"👤{'+' if net > 0 else ''}{net/1e6:.0f}M"
+                except Exception as ie:
+                    print(f"      내부자 수집 오류 {ticker}: {ie}")
+
+            print(f"  [{i:>2}/{len(universe)}] {tag}{info_tag}{news_tag}{insider_tag} {ticker}")
         except Exception as e:
             fail += 1
             print(f"  [{i:>2}/{len(universe)}] ❌ {ticker}: {e}")
@@ -122,12 +133,12 @@ def collect(delay: float = 0.4):
 
     elapsed = (datetime.datetime.now() - start).seconds
     print("\n" + "=" * 56)
-    print(f"  ✅ 완료 — history {ok_hist} · info {ok_info} · news {ok_news} · 실패 {fail} "
-          f"({elapsed // 60}분 {elapsed % 60}초)")
+    print(f"  ✅ 완료 — history {ok_hist} · info {ok_info} · news {ok_news} · "
+          f"insider {ok_insider} · 실패 {fail} ({elapsed // 60}분 {elapsed % 60}초)")
     print(f"  캐시 현황: {market_cache.cache_status()}")
     print("=" * 56)
     return {"history": ok_hist, "info": ok_info, "news": ok_news,
-            "fail": fail, "total": len(universe)}
+            "insider": ok_insider, "fail": fail, "total": len(universe)}
 
 
 if __name__ == "__main__":

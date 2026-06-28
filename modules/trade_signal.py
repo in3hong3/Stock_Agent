@@ -15,6 +15,7 @@ import pandas as pd
 import yfinance as yf
 
 from core.services.market_cache import get_history, get_info, get_ownership_trend
+from modules.insider_tracker import get_insider_activity, insider_score
 
 
 # ──────────────────────────────────────────────
@@ -168,9 +169,18 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
             pts += 2; notes.append(f"기관 보유 {inst_pct:.0f}% (두터운 기관 기반)")
         elif inst_pct < 20:
             pts -= 2; notes.append(f"기관 보유 {inst_pct:.0f}% (기관 소외)")
-    # 4-c) 내부자 보유 (경영진-주주 이해관계 정렬)
+    # 4-c) 내부자 보유 수준 (경영진-주주 이해관계 정렬)
     if isinstance(insider_pct, (int, float)) and insider_pct >= 10:
         pts += 1; notes.append(f"내부자 보유 {insider_pct:.0f}% (경영진 정렬)")
+
+    # 5) 내부자 거래 — SEC Form 4 공개시장 매수/매도 (2단계, 캐시만 읽음)
+    insider_act = get_insider_activity(ticker, allow_live=False)
+    ins = insider_score(insider_act)
+    if ins["points"]:
+        pts += ins["points"]
+    if ins["note"]:
+        notes.append(ins["note"])
+    insider_buying = ins["buying"]
 
     # 종합 판정
     if not notes:
@@ -193,7 +203,9 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
         "eps_growth": round(eps_g * 100, 1) if isinstance(eps_g, (int, float)) else None,
         "inst_pct": inst_pct, "insider_pct": insider_pct, "inst_change_pp": inst_chg,
         "inst_accumulating": inst_accumulating,
-        "inst_support": inst_strong or inst_accumulating,
+        "insider_buying": insider_buying,
+        "insider_net_value": insider_act.get("net_value", 0) if insider_act.get("available") else None,
+        "inst_support": inst_strong or inst_accumulating or insider_buying,
     }
 
 
@@ -358,6 +370,8 @@ def analyze_stock(ticker: str, quantity: float = 0, avg_price: float = 0) -> Dic
         inst_support=valuation.get("inst_support", False),
         inst_accumulating=valuation.get("inst_accumulating", False),
         inst_change_pp=valuation.get("inst_change_pp"),
+        insider_buying=valuation.get("insider_buying", False),
+        insider_net_value=valuation.get("insider_net_value"),
     )
 
     return {
@@ -392,6 +406,8 @@ def _identify_setup(**k) -> tuple:
     inst_support = k.get("inst_support", False)        # 기관 기반 두텁거나 보유율 증가 중
     inst_accumulating = k.get("inst_accumulating", False)  # 기관 보유율 '증가 추세' (순매수)
     inst_change_pp = k.get("inst_change_pp")
+    insider_buying = k.get("insider_buying", False)    # 내부자 공개시장 순매수 (Form 4)
+    insider_net_value = k.get("insider_net_value")
 
     score = 0
     reasons = []
@@ -438,16 +454,22 @@ def _identify_setup(**k) -> tuple:
         eps_str = f" (EPS {eps_growth:+.0f}%)" if isinstance(eps_growth, (int, float)) else ""
         inst_acc = inst_accumulating and isinstance(inst_change_pp, (int, float))
         inst_phrase = f"기관 순매수(보유율 {inst_change_pp:+.1f}%p)" if inst_acc else ""
-        # 삼각편대 ②: 펀더(엔진)가 강하거나, 기관이 모으는(보유율 증가) 중이면
-        # 과열을 '되돌림'이 아니라 '강세 진짜'로 해석 (RSI 과열 + 기관비율 증가 = 진성 강세)
-        if (engine_strong or inst_acc) and wk_trend == "상승" and not macd_weakening:
-            driver = "펀더+기관 주도" if (engine_strong and inst_acc) else \
-                     ("펀더 주도" if engine_strong else "기관 주도")
+        insider_phrase = ""
+        if insider_buying:
+            insider_phrase = (f"내부자 순매수(${insider_net_value/1e6:.1f}M)"
+                              if isinstance(insider_net_value, (int, float)) and insider_net_value
+                              else "내부자 순매수")
+        smart_money = inst_acc or insider_buying   # 기관/내부자 = 스마트머니
+        # 삼각편대 ②: 펀더(엔진)가 강하거나, 스마트머니(기관·내부자)가 모으면
+        # 과열을 '되돌림'이 아니라 '강세 진짜'로 해석 (RSI 과열 + 스마트머니 순매수 = 진성 강세)
+        if (engine_strong or smart_money) and wk_trend == "상승" and not macd_weakening:
+            driver = "펀더+스마트머니 주도" if (engine_strong and smart_money) else \
+                     ("펀더 주도" if engine_strong else "스마트머니 주도")
             setup = f"🔥 강세 모멘텀 ({driver})"
-            score = 18 + (8 if (engine_strong and inst_acc) else 0)  # 둘 다면 가산
+            score = 18 + (8 if (engine_strong and smart_money) else 0)  # 둘 다면 가산
             lead = " + ".join(p for p in (
                 f"실적 엔진 강함{eps_str}" if engine_strong else "",
-                inst_phrase,
+                inst_phrase, insider_phrase,
             ) if p)
             reasons.append(("✅", f"RSI {rsi:.0f} 과매수지만 {lead} + 주봉 상승 — "
                                   f"과열을 '강세 신호'로 해석, 추세 추종 보유 (올랜도 킴식)"))
@@ -458,9 +480,9 @@ def _identify_setup(**k) -> tuple:
             reasons.append(("⛔", f"RSI {rsi:.0f} 과매수 + 볼린저 상단({bb_pos:.0f}%) — 단기 과열, 되돌림 리스크"))
             if not engine_strong:
                 reasons.append(("⛔", f"실적 엔진 약함{eps_str} — 펀더 뒷받침 없는 과열이라 되돌림 가능성 큼"))
-            if inst_accumulating and isinstance(inst_change_pp, (int, float)):
-                score += 6; reasons.append(("•", f"단 기관 보유율 {inst_change_pp:+.1f}%p 증가 중 — "
-                                                 f"되돌림은 분할 익절로, 전량 청산은 보류"))
+            if inst_acc or insider_buying:
+                sm = inst_phrase or insider_phrase
+                score += 6; reasons.append(("•", f"단 {sm} 중 — 되돌림은 분할 익절로, 전량 청산은 보류"))
             if k["macd_cross_dn"]:
                 score -= 10; reasons.append(("⛔", "MACD 데드크로스 — 모멘텀 둔화 확인"))
 
