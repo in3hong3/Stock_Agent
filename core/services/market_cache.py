@@ -17,7 +17,7 @@ import os
 import json
 import logging
 from datetime import timedelta
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import pandas as pd
 import yfinance as yf
@@ -29,6 +29,7 @@ CACHE_DIR = os.path.join(_BASE_DIR, "data", "cache")
 HIST_DIR = os.path.join(CACHE_DIR, "history")
 INFO_DIR = os.path.join(CACHE_DIR, "info")
 NEWS_DIR = os.path.join(CACHE_DIR, "news")
+OWN_DIR = os.path.join(CACHE_DIR, "ownership")
 META_PATH = os.path.join(CACHE_DIR, "_meta.json")
 
 # 캐시 신선도: 마지막 수집 후 이 시간(h)이 지나면 stale → 라이브 fallback.
@@ -259,6 +260,93 @@ def get_news(ticker: str, max_items: int = 10, force_live: bool = False) -> list
             items = save_news(ticker, fresh)
     items = sorted(items, key=lambda n: n.get("published", ""), reverse=True)
     return items[:max_items] if max_items else items
+
+
+# ──────────────────────────────────────────────
+# 기관/내부자 보유율 스냅샷 (스마트머니 추적 — 삼각편대 ②)
+#   .info는 보유율 '현재값'만 줌(분기 13F 기준). 매일 스냅샷을 누적 저장해
+#   '기관이 모으는지(보유율 증가 추세)'를 계산한다. (날짜당 1건, 누적)
+# ──────────────────────────────────────────────
+def _own_path(ticker: str) -> str:
+    return os.path.join(OWN_DIR, f"{_safe_name(ticker)}.json")
+
+
+def _load_ownership(ticker: str) -> list:
+    path = _own_path(ticker)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                items = json.load(f)
+            return items if isinstance(items, list) else []
+        except Exception:
+            return []
+    return []
+
+
+def record_ownership(ticker: str, info: Dict) -> bool:
+    """오늘자 기관/내부자 보유율 스냅샷을 누적 저장 (같은 날짜는 갱신, 누적 보존)."""
+    if not info:
+        return False
+    inst = info.get("heldPercentInstitutions")
+    insider = info.get("heldPercentInsiders")
+    if not isinstance(inst, (int, float)) and not isinstance(insider, (int, float)):
+        return False
+    today = _now_kst().strftime("%Y-%m-%d")
+    hist = [s for s in _load_ownership(ticker) if s.get("date") != today]
+    hist.append({
+        "date": today,
+        "inst": round(float(inst), 5) if isinstance(inst, (int, float)) else None,
+        "insider": round(float(insider), 5) if isinstance(insider, (int, float)) else None,
+    })
+    hist.sort(key=lambda s: s.get("date", ""))
+    try:
+        os.makedirs(OWN_DIR, exist_ok=True)
+        tmp = _own_path(ticker) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(hist, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, _own_path(ticker))
+        return True
+    except Exception as e:
+        logger.warning(f"ownership 저장 실패 ({ticker}): {e}")
+        return False
+
+
+def get_ownership_trend(ticker: str, info: Dict = None) -> Dict[str, Any]:
+    """기관/내부자 보유율 현재값 + 누적 스냅샷 기반 변화량(%p) 반환.
+    Returns: {inst_pct, insider_pct, inst_change_pp, baseline_date}
+      inst_change_pp = 현재 기관보유율 − 과거(30~200일 전 가장 오래된) 보유율, %p 단위.
+      스냅샷이 부족하면 inst_change_pp=None (변화 판정 보류)."""
+    info = info if info is not None else get_info(ticker)
+    cur_inst = info.get("heldPercentInstitutions") if info else None
+    cur_insider = info.get("heldPercentInsiders") if info else None
+
+    inst_pct = round(cur_inst * 100, 1) if isinstance(cur_inst, (int, float)) else None
+    insider_pct = round(cur_insider * 100, 1) if isinstance(cur_insider, (int, float)) else None
+
+    change_pp = None
+    baseline_date = None
+    if isinstance(cur_inst, (int, float)):
+        snaps = [s for s in _load_ownership(ticker) if isinstance(s.get("inst"), (int, float))]
+        if snaps:
+            now = _now_kst()
+            # 30~200일 전 구간에서 가장 오래된 스냅샷을 기준선으로 (분기 변화 포착)
+            candidates = []
+            for s in snaps:
+                try:
+                    d = pd.Timestamp(s["date"])
+                    age = (pd.Timestamp(now.date()) - d).days
+                    if 30 <= age <= 200:
+                        candidates.append((age, s))
+                except Exception:
+                    continue
+            if candidates:
+                candidates.sort(reverse=True)  # 가장 오래된(age 큰) 것
+                base = candidates[0][1]
+                change_pp = round((cur_inst - base["inst"]) * 100, 2)
+                baseline_date = base["date"]
+
+    return {"inst_pct": inst_pct, "insider_pct": insider_pct,
+            "inst_change_pp": change_pp, "baseline_date": baseline_date}
 
 
 def cache_status() -> Dict:

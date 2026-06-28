@@ -103,6 +103,7 @@ def collect(delay: float = 0.4):
                 if info and market_cache.save_info(ticker, info):
                     ok_info += 1
                     info_tag = "💼"
+                    market_cache.record_ownership(ticker, info)  # 기관/내부자 보유율 스냅샷 누적
 
                 # 뉴스: 누적 더미에 새 기사만 합침 (덮어쓰지 않음)
                 news = market_cache._fetch_news_live(ticker)

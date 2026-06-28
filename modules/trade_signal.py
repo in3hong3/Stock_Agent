@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from core.services.market_cache import get_history, get_info
+from core.services.market_cache import get_history, get_info, get_ownership_trend
 
 
 # ──────────────────────────────────────────────
@@ -145,6 +145,33 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
         else:
             pts -= 8; notes.append(f"목표가 {upside:+.0f}% (현재가가 목표가 상회)")
 
+    # 4) 스마트머니 — 기관/내부자 보유 (올랜도 킴식 삼각편대 ②: 기관이 모으는가)
+    own = get_ownership_trend(ticker, info)
+    inst_pct, insider_pct = own.get("inst_pct"), own.get("insider_pct")
+    inst_chg = own.get("inst_change_pp")
+    inst_accumulating = isinstance(inst_chg, (int, float)) and inst_chg >= 2.0
+    inst_strong = isinstance(inst_pct, (int, float)) and inst_pct >= 70
+
+    # 4-a) 기관 보유 '변화' (모으는지) — 진짜 스마트머니 신호. 절대수준보다 가중치 큼.
+    if isinstance(inst_chg, (int, float)):
+        if inst_chg >= 2.0:
+            pts += 8; notes.append(f"기관 보유율 {inst_chg:+.1f}%p 증가 (기관 순매수 추정)")
+        elif inst_chg >= 0.5:
+            pts += 3; notes.append(f"기관 보유율 {inst_chg:+.1f}%p 소폭 증가")
+        elif inst_chg <= -2.0:
+            pts -= 8; notes.append(f"기관 보유율 {inst_chg:+.1f}%p 감소 (기관 이탈/순매도)")
+        elif inst_chg <= -0.5:
+            pts -= 3; notes.append(f"기관 보유율 {inst_chg:+.1f}%p 소폭 감소")
+    # 4-b) 기관 보유 '수준' (절대) — 두터우면 신뢰, 소외되면 감점
+    if isinstance(inst_pct, (int, float)):
+        if inst_pct >= 70:
+            pts += 2; notes.append(f"기관 보유 {inst_pct:.0f}% (두터운 기관 기반)")
+        elif inst_pct < 20:
+            pts -= 2; notes.append(f"기관 보유 {inst_pct:.0f}% (기관 소외)")
+    # 4-c) 내부자 보유 (경영진-주주 이해관계 정렬)
+    if isinstance(insider_pct, (int, float)) and insider_pct >= 10:
+        pts += 1; notes.append(f"내부자 보유 {insider_pct:.0f}% (경영진 정렬)")
+
     # 종합 판정
     if not notes:
         verdict = "평가불가"
@@ -164,6 +191,9 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
         "upside": round(upside, 1) if upside is not None else None,
         "engine_strong": engine_strong,
         "eps_growth": round(eps_g * 100, 1) if isinstance(eps_g, (int, float)) else None,
+        "inst_pct": inst_pct, "insider_pct": insider_pct, "inst_change_pp": inst_chg,
+        "inst_accumulating": inst_accumulating,
+        "inst_support": inst_strong or inst_accumulating,
     }
 
 
@@ -325,6 +355,9 @@ def analyze_stock(ticker: str, quantity: float = 0, avg_price: float = 0) -> Dic
         chg_5d=chg_5d, high_52w=high_52w,
         engine_strong=valuation.get("engine_strong", False),
         eps_growth=valuation.get("eps_growth"),
+        inst_support=valuation.get("inst_support", False),
+        inst_accumulating=valuation.get("inst_accumulating", False),
+        inst_change_pp=valuation.get("inst_change_pp"),
     )
 
     return {
@@ -356,6 +389,9 @@ def _identify_setup(**k) -> tuple:
     engine_strong = k.get("engine_strong", False)   # EPS 성장 강함 (올랜도 킴식 '엔진')
     eps_growth = k.get("eps_growth")
     macd_weakening = k.get("macd_weakening", False)
+    inst_support = k.get("inst_support", False)        # 기관 기반 두텁거나 보유율 증가 중
+    inst_accumulating = k.get("inst_accumulating", False)  # 기관 보유율 '증가 추세' (순매수)
+    inst_change_pp = k.get("inst_change_pp")
 
     score = 0
     reasons = []
@@ -400,18 +436,31 @@ def _identify_setup(**k) -> tuple:
     #    '강세 모멘텀'으로 보고 보유. 엔진이 약하거나 추세 꺾이면 그제야 익절.
     elif rsi >= 72 and bb_pos >= 88:
         eps_str = f" (EPS {eps_growth:+.0f}%)" if isinstance(eps_growth, (int, float)) else ""
-        if engine_strong and wk_trend == "상승" and not macd_weakening:
-            setup = "🔥 강세 모멘텀 (펀더 주도)"
-            score = 18
-            reasons.append(("✅", f"RSI {rsi:.0f} 과매수지만 실적 엔진 강함{eps_str} + 주봉 상승 — "
+        inst_acc = inst_accumulating and isinstance(inst_change_pp, (int, float))
+        inst_phrase = f"기관 순매수(보유율 {inst_change_pp:+.1f}%p)" if inst_acc else ""
+        # 삼각편대 ②: 펀더(엔진)가 강하거나, 기관이 모으는(보유율 증가) 중이면
+        # 과열을 '되돌림'이 아니라 '강세 진짜'로 해석 (RSI 과열 + 기관비율 증가 = 진성 강세)
+        if (engine_strong or inst_acc) and wk_trend == "상승" and not macd_weakening:
+            driver = "펀더+기관 주도" if (engine_strong and inst_acc) else \
+                     ("펀더 주도" if engine_strong else "기관 주도")
+            setup = f"🔥 강세 모멘텀 ({driver})"
+            score = 18 + (8 if (engine_strong and inst_acc) else 0)  # 둘 다면 가산
+            lead = " + ".join(p for p in (
+                f"실적 엔진 강함{eps_str}" if engine_strong else "",
+                inst_phrase,
+            ) if p)
+            reasons.append(("✅", f"RSI {rsi:.0f} 과매수지만 {lead} + 주봉 상승 — "
                                   f"과열을 '강세 신호'로 해석, 추세 추종 보유 (올랜도 킴식)"))
-            reasons.append(("•", "엔진이 식거나(EPS 둔화) MACD 히스토그램 꺾이면 즉시 익절 전환"))
+            reasons.append(("•", "엔진이 식거나(EPS 둔화)·기관이 빠지거나·MACD 히스토그램 꺾이면 즉시 익절 전환"))
         else:
             setup = "🔴 과열 — 분할 익절"
             score = -32
             reasons.append(("⛔", f"RSI {rsi:.0f} 과매수 + 볼린저 상단({bb_pos:.0f}%) — 단기 과열, 되돌림 리스크"))
             if not engine_strong:
                 reasons.append(("⛔", f"실적 엔진 약함{eps_str} — 펀더 뒷받침 없는 과열이라 되돌림 가능성 큼"))
+            if inst_accumulating and isinstance(inst_change_pp, (int, float)):
+                score += 6; reasons.append(("•", f"단 기관 보유율 {inst_change_pp:+.1f}%p 증가 중 — "
+                                                 f"되돌림은 분할 익절로, 전량 청산은 보류"))
             if k["macd_cross_dn"]:
                 score -= 10; reasons.append(("⛔", "MACD 데드크로스 — 모멘텀 둔화 확인"))
 
