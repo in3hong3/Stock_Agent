@@ -77,16 +77,25 @@ def check_data_collection():
 
 
 def check_daily_paper():
-    """데일리신문이 오늘 발행됐나."""
-    path = os.path.join(_BASE, "data", "daily_paper.json")
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            store = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return ("paper", False, "daily_paper.json 없음 — 발행 누락")
-    if store.get("date") == _today_kst() and store.get("front"):
-        return ("paper", True, f"오늘 발행됨 ({store.get('time', '?')})")
-    return ("paper", False, f"최신 발행일 {store.get('date', '?')} ≠ 오늘 — 발행 누락 의심")
+    """데일리신문이 오늘 발행됐나 (사용자별 파일 — 누구든 1명 이상 오늘치면 OK)."""
+    import glob
+    today = _today_kst()
+    paths = glob.glob(os.path.join(_BASE, "data", "users", "*", "daily_paper.json"))
+    if not paths:
+        return ("paper", False, "발행된 데일리신문 없음 (사용자 파일 0개)")
+    published = []
+    for p in paths:
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                store = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            continue
+        uid = os.path.basename(os.path.dirname(p))
+        if store.get("date") == today and store.get("front"):
+            published.append(uid)
+    if published:
+        return ("paper", True, f"오늘 발행됨 — {', '.join(published)}")
+    return ("paper", False, "오늘 발행된 사용자 신문 없음 — 발행 누락 의심")
 
 
 def check_yfinance():

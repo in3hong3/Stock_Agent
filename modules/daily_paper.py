@@ -164,7 +164,15 @@ import os
 import json
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PAPER_FILE = os.path.join(_BASE_DIR, "data", "daily_paper.json")
+# 레거시 전역 경로 (사용자별로 옮기기 전 호환용)
+_LEGACY_PAPER_FILE = os.path.join(_BASE_DIR, "data", "daily_paper.json")
+
+
+def _paper_file() -> str:
+    """데일리신문 저장 경로 — 사용자별. (전역 1개를 공유하면 여러 사용자가
+    서로의 신문을 덮어써서 '남의 포트폴리오 뉴스'가 섞이는 버그가 있어 분리)."""
+    from utils.user_data import user_file
+    return user_file("daily_paper.json")
 
 _EDITOR_SYSTEM = (
     "너는 30년 경력의 경제신문 편집장이야. 문체 원칙: "
@@ -177,16 +185,18 @@ _EDITOR_SYSTEM = (
 
 
 def _load_paper_store() -> Dict[str, Any]:
+    path = _paper_file()
     try:
-        with open(PAPER_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
 
 
 def _save_paper_store(store: Dict[str, Any]):
-    os.makedirs(os.path.dirname(PAPER_FILE), exist_ok=True)
-    with open(PAPER_FILE, "w", encoding="utf-8") as f:
+    path = _paper_file()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(store, f, ensure_ascii=False, indent=2)
 
 
