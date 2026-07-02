@@ -323,11 +323,23 @@ def refresh_portfolio_from_cache(user_id: str = None) -> Dict[str, any]:
     if "current_price" not in df.columns or "ticker" not in df.columns:
         return {"user": user_id, "skipped": "컬럼 없음"}
 
+    from core.services.market_cache import get_info
+
     updated, fixed = 0, []
     for idx, row in df.iterrows():
         ticker = str(row.get("ticker", "")).strip().upper()
         if not ticker or ticker in ("USD", "NAN", "NONE"):  # 빈 행(NaN) 스킵
             continue
+        # 종목명이 비어있으면 캐시된 info에서 회사명 채우기
+        _nm = str(row.get("name", "") or "").strip()
+        if "name" in df.columns and (not _nm or _nm.lower() in ("nan", "none")):
+            try:
+                info = get_info(ticker)
+                nm = info.get("shortName") or info.get("longName")
+                if nm:
+                    df.at[idx, "name"] = nm
+            except Exception:
+                pass
         try:
             hist = get_history(ticker, "5d")
             if hist is None or hist.empty:

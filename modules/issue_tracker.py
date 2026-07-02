@@ -141,9 +141,12 @@ def get_portfolio_holdings() -> List[Dict[str, Any]]:
                 cur = float(row.get("current_price", 0) or 0)
             except (TypeError, ValueError):
                 cur = 0.0
+            _nm = str(row.get("name", "") or "").strip()
+            if not _nm or _nm.lower() in ("nan", "none"):
+                _nm = tk.upper()  # 종목명 비었으면 'nan' 대신 티커로 표시
             out.append({
                 "ticker": str(row["ticker"]).strip().upper(),
-                "name": str(row.get("name", row["ticker"])),
+                "name": _nm,
                 "quantity": float(row.get("quantity", 0) or 0),
                 "avg_price": float(row.get("avg_price", 0) or 0),
                 "current_price": cur,
