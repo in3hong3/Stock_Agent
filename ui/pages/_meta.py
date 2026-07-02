@@ -67,6 +67,22 @@ def get_cached_signals(holdings_key, stance, seed, risk):
     return generate_signals(get_portfolio_holdings(), stance, seed, risk)
 
 
+@st.cache_data(ttl=900)
+def get_cached_watchlist_signals(wl_key, stance, seed, risk):
+    """관심종목(미보유)만 매매 시그널 — '오늘 할 일'에 신규매수 후보로 노출용.
+    wl_key는 캐시 무효화용 (관심종목 티커 튜플)."""
+    from modules.trade_signal import generate_signals
+    from modules.issue_tracker import get_portfolio_holdings
+    from modules.watchlist import load_watchlist
+    held = {h["ticker"] for h in get_portfolio_holdings()}
+    targets = [{"ticker": it["ticker"], "name": it.get("name", it["ticker"]),
+                "quantity": 0, "avg_price": 0}
+               for it in load_watchlist() if it.get("ticker") not in held]
+    if not targets:
+        return {"signals": []}
+    return generate_signals(targets, stance, seed, risk)
+
+
 def compute_total_assets(holdings: list, fx: float) -> dict:
     """보유 종목(csv current_price) + 현금으로 원화 기준 총자산 계산.
 

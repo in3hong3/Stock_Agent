@@ -42,10 +42,25 @@ def _render_todo_video(holdings, fx):
         except Exception as e:
             print(f"예측 기록 실패: {e}")
 
+        # 관심종목(미보유) 매수 후보도 '오늘 할 일'에 포함 (매수 신호만, 관망 제외)
+        combined_signals = list(signal_result["signals"])
+        try:
+            from ui.pages._meta import get_cached_watchlist_signals
+            from modules.watchlist import load_watchlist
+            wl_key = tuple(it.get("ticker") for it in load_watchlist())
+            if wl_key:
+                wl_sigs = get_cached_watchlist_signals(wl_key, stance, seed, risk).get("signals", [])
+                combined_signals += [
+                    {**s, "watchlist": True}
+                    for s in wl_sigs if s.get("action") in ("적극 매수", "분할 매수")
+                ]
+        except Exception as e:
+            print(f"관심종목 액션 실패: {e}")
+
         from ui.pages._meta import load_cash
         _cash_usd = float(load_cash().get("usd", 0) or 0)
         actions = build_actions(pd.DataFrame(), tickers, stance,
-                                signals=signal_result["signals"], fx=fx, cash_usd=_cash_usd)
+                                signals=combined_signals, fx=fx, cash_usd=_cash_usd)
         if actions:
             badge = PERSONAS[stance]["label"]
 

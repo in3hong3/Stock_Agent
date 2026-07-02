@@ -135,9 +135,13 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                 lines.append(("⏸️", "현금 0 — 지금은 매수 보류 (현금 생기면 후보)"))
 
             is_strong = "🟢🟢" in s["icon"] or "🔴🔴" in s["icon"]
+            # 관심종목(미보유)은 제목에 표시해 보유분과 구분
+            _title = f"{tk} → {s['action']}"
+            if s.get("watchlist"):
+                _title += " 🔖관심"
             actions.append({
                 "priority": 1 if is_strong else 2, "kind": "stock",
-                "icon": s["icon"], "title": f"{tk} → {s['action']}", "meta": meta,
+                "icon": s["icon"], "title": _title, "meta": meta,
                 "lines": lines,
             })
 
