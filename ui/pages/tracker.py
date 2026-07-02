@@ -60,6 +60,18 @@ def _render_accuracy_top_card():
     wr_str = f"{wr:.0f}%" if wr is not None else "—"
     br_str = f"{br:+.1f}%" if br is not None else "—"
 
+    # 시장(SPY) 대비 — 절대 수익률만 보면 시장 하락기에 억울하게 낮게 나옴
+    alpha_html = ""
+    aw = acc.get("alpha_win_rate")
+    ae = acc.get("avg_excess")
+    if aw is not None:
+        aw_color = "#00FFA3" if aw >= 55 else "#FFD700" if aw >= 45 else "#FF4B4B"
+        ae_str = f" (평균 {ae:+.1f}%p)" if ae is not None else ""
+        alpha_html = (
+            f" · 시장 대비 승률 <b style='color:{aw_color}; font-size:1.05rem;'>{aw:.0f}%</b>"
+            f"<span style='color:#94A3B8;'>{ae_str}</span>"
+        )
+
     st.markdown(
         f"<div style='background: linear-gradient(160deg, #142028, #16181F); "
         f"border: 1px solid #00FFA355; border-radius: 14px; padding: 14px 18px; margin-bottom: 12px;'>"
@@ -73,6 +85,7 @@ def _render_accuracy_top_card():
         f"종합 적중률 <b style='color:{wr_color}; font-size:1.05rem;'>{wr_str}</b> · "
         f"매수 시그널 평균수익 "
         f"<b style='color:{br_color}; font-size:1.05rem;'>{br_str}</b>"
+        f"{alpha_html}"
         f"</div></div>"
         f"<div>{badge}</div>"
         f"</div></div>",

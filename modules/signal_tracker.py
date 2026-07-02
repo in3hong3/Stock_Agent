@@ -12,7 +12,6 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 import pandas as pd
-import yfinance as yf
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 from utils.user_data import signal_predictions_path
@@ -27,6 +26,8 @@ COLUMNS = [
     "rsi", "adx", "wk_trend",
     # 채점 결과 (나중에 채워짐)
     "graded", "grade_date", "price_after", "ret_pct", "outcome", "horizon_days",
+    # 시장 대비 (SPY 벤치마크): 같은 기간 SPY 수익률과 초과수익(%p)
+    "spy_ret_pct", "excess_pct",
 ]
 
 
@@ -76,21 +77,45 @@ def record_predictions(signals: List[Dict], stance: str) -> int:
     return len(rows)
 
 
-def grade_predictions(horizon_days: int = 10) -> Dict[str, Any]:
+def grade_predictions(horizon_days: int = 10, regrade: bool = False) -> Dict[str, Any]:
     """
-    horizon_days일 이상 지난 미채점 예측을 실제 가격으로 채점.
-    매수 시그널: 목표 도달=적중, 손절 터치=실패, 그 외 수익률로 판정.
+    horizon_days일 이상 지난 예측을 실제 가격으로 채점.
+
+    채점 원칙 (2026-07 개편 — 측정 편향 제거):
+      매수: ① 목표 도달(장중 고가) = 적중(목표달성)
+            ② 손절은 '종가 기준' 이탈만 실패 — 장중 꼬리 스침은 실패로 안 침
+            ③ 그 외엔 수익률>0 = 적중(수익) / ≤0 = 실패(손실)
+            → 모든 매수가 승/패로 결판나 표본이 커지고,
+              '손절은 가깝고 목표는 멀어서 지는' 구조적 편향이 제거됨
+      매도/회피: 하락했으면 적중(하락회피), 올랐으면 실패(상승놓침)
+      관망: 참고용 (승/패 집계 제외)
+      + 같은 기간 SPY 수익률을 함께 기록 → '시장 대비 초과수익' 측정
+
+    regrade=True: 이미 채점된 건도 새 기준으로 재채점 (기준 변경 시 1회).
     """
+    from core.services.market_cache import get_history
+
     df = _load()
     if df.empty:
         return {"graded_count": 0}
 
     today = datetime.now().date()
-    mask_ungraded = ~df["graded"].isin([True, "True"])
+    if regrade:
+        mask = pd.Series(True, index=df.index)
+    else:
+        mask = ~df["graded"].isin([True, "True"])
     graded_count = 0
     price_cache = {}
 
-    for idx in df[mask_ungraded].index:
+    def _hist(tk):
+        if tk not in price_cache:
+            try:
+                price_cache[tk] = get_history(tk, period="6mo")
+            except Exception:
+                price_cache[tk] = None
+        return price_cache[tk]
+
+    for idx in df[mask].index:
         row = df.loc[idx]
         try:
             pred_date = datetime.strptime(str(row["pred_date"]), "%Y-%m-%d").date()
@@ -100,13 +125,7 @@ def grade_predictions(horizon_days: int = 10) -> Dict[str, Any]:
         if age < horizon_days:
             continue
 
-        ticker = row["ticker"]
-        if ticker not in price_cache:
-            try:
-                price_cache[ticker] = yf.Ticker(ticker).history(period="3mo")
-            except Exception:
-                price_cache[ticker] = None
-        hist = price_cache[ticker]
+        hist = _hist(row["ticker"])
         if hist is None or hist.empty:
             continue
 
@@ -117,20 +136,40 @@ def grade_predictions(horizon_days: int = 10) -> Dict[str, Any]:
         if window.empty:
             continue
 
-        price_pred = float(row["price_at_pred"])
+        try:
+            price_pred = float(row["price_at_pred"])
+        except (TypeError, ValueError):
+            continue
+        if not price_pred or pd.isna(price_pred):
+            continue
         price_after = float(window["Close"].iloc[-1])
         ret = (price_after / price_pred - 1) * 100
+
+        # ── 같은 기간 SPY (시장 벤치마크) ──
+        spy_ret = None
+        spy = _hist("SPY")
+        if spy is not None and not spy.empty:
+            try:
+                sw = spy[spy.index.date >= pred_date].head(len(window))
+                if len(sw) >= 2:
+                    spy_ret = (float(sw["Close"].iloc[-1]) / float(sw["Close"].iloc[0]) - 1) * 100
+            except Exception:
+                pass
+        excess = round(ret - spy_ret, 2) if spy_ret is not None else None
 
         action = str(row["action"])
         if "매수" in action:
             hit_target = pd.notna(row["target"]) and (window["High"].max() >= float(row["target"]))
-            hit_stop = pd.notna(row["stop"]) and (window["Low"].min() <= float(row["stop"]))
-            if hit_target and not hit_stop:
+            # 손절: 종가 기준 이탈만 실패 (장중 꼬리 스침 제외)
+            stop_break = pd.notna(row["stop"]) and (window["Close"].min() <= float(row["stop"]))
+            if hit_target and not stop_break:
                 outcome = "적중(목표달성)"
-            elif hit_stop:
-                outcome = "실패(손절터치)"
+            elif stop_break:
+                outcome = "실패(손절이탈)"
+            elif ret > 0:
+                outcome = "적중(수익)"
             else:
-                outcome = "진행중(수익)" if ret > 0 else "진행중(손실)"
+                outcome = "실패(손실)"
         elif "축소" in action or "익절" in action or "회피" in action:
             outcome = "적중(하락회피)" if ret < 0 else "실패(상승놓침)"
         else:
@@ -142,6 +181,8 @@ def grade_predictions(horizon_days: int = 10) -> Dict[str, Any]:
         df.at[idx, "ret_pct"] = round(ret, 2)
         df.at[idx, "outcome"] = outcome
         df.at[idx, "horizon_days"] = age
+        df.at[idx, "spy_ret_pct"] = round(spy_ret, 2) if spy_ret is not None else None
+        df.at[idx, "excess_pct"] = excess
         graded_count += 1
 
     if graded_count:
@@ -168,6 +209,19 @@ def get_accuracy_stats() -> Dict[str, Any]:
     buy = graded[graded["action"].astype(str).str.contains("매수")]
     buy_ret = buy["ret_pct"].astype(float).mean() if not buy.empty else None
 
+    # 매수 시그널만 따로: 승률 + 시장(SPY) 대비 초과수익 (알파)
+    buy_win_rate = None
+    alpha_win_rate = None
+    avg_excess = None
+    if not buy.empty:
+        buy_dec = buy[buy["outcome"].apply(lambda o: is_win(o) or is_loss(o))]
+        if not buy_dec.empty:
+            buy_win_rate = round(buy_dec["outcome"].apply(is_win).mean() * 100, 1)
+        excess = pd.to_numeric(buy["excess_pct"], errors="coerce").dropna()
+        if not excess.empty:
+            alpha_win_rate = round((excess > 0).mean() * 100, 1)  # 시장을 이긴 비율
+            avg_excess = round(excess.mean(), 2)                  # 평균 초과수익(%p)
+
     setup_stats = {}
     for setup, grp in graded.groupby("setup"):
         dec = grp[grp["outcome"].apply(lambda o: is_win(o) or is_loss(o))]
@@ -182,6 +236,9 @@ def get_accuracy_stats() -> Dict[str, Any]:
         "total": len(df), "graded": len(graded), "pending": len(df) - len(graded),
         "win_rate": round(win_rate, 1) if win_rate is not None else None,
         "buy_avg_ret": round(buy_ret, 1) if buy_ret is not None else None,
+        "buy_win_rate": buy_win_rate,       # 매수 시그널 승률 (수익>0 기준)
+        "alpha_win_rate": alpha_win_rate,   # 시장(SPY)을 이긴 비율
+        "avg_excess": avg_excess,           # 평균 초과수익 (%p)
         "setup_stats": setup_stats,
         "recent": graded.sort_values("pred_date", ascending=False).head(15),
     }
