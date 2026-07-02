@@ -134,7 +134,8 @@ def get_portfolio_holdings() -> List[Dict[str, Any]]:
         df = pd.read_csv(_portfolio_csv())
         out = []
         for _, row in df.iterrows():
-            if not str(row.get("ticker", "")).strip():
+            tk = str(row.get("ticker", "")).strip()
+            if not tk or tk.lower() in ("nan", "none"):  # 빈 행(NaN)이 'NAN' 종목으로 뜨는 것 차단
                 continue
             try:
                 cur = float(row.get("current_price", 0) or 0)

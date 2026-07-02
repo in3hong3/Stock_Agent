@@ -326,7 +326,7 @@ def refresh_portfolio_from_cache(user_id: str = None) -> Dict[str, any]:
     updated, fixed = 0, []
     for idx, row in df.iterrows():
         ticker = str(row.get("ticker", "")).strip().upper()
-        if not ticker or ticker == "USD":
+        if not ticker or ticker in ("USD", "NAN", "NONE"):  # 빈 행(NaN) 스킵
             continue
         try:
             hist = get_history(ticker, "5d")

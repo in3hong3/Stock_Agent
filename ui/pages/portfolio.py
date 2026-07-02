@@ -361,7 +361,8 @@ def render_tab_portfolio():
     st.markdown("---")
     ic1, ic2 = st.columns([3, 2])
     with ic1:
-        st.info("💡 표에서 수정하고 아래 **'💾 변경사항 저장'** 버튼을 눌러주세요. 저장 전까진 CSV에 반영되지 않습니다. 행 삭제는 왼쪽 체크 후 Delete 키.")
+        st.info("💡 표에서 **수량·평단가**를 고치고 **'💾 변경사항 저장'**을 누르세요. "
+                "**추가**는 위 '➕ 일괄 추가'(한글명 가능), **삭제**는 아래 '🗑️ 종목 삭제'에서 하세요.")
     with ic2:
         st.info(f"🕐 **현재가 기준**: {load_price_timestamp()}  \n"
                 f"(yfinance 시세 — 장중 약 15분 지연, 장 마감 후엔 종가)")
@@ -380,7 +381,7 @@ def render_tab_portfolio():
 
     edited_df = st.data_editor(
         editor_input,
-        num_rows="dynamic",
+        num_rows="fixed",  # 표에서 행 추가 금지 → 빈 행(nan) 박제 방지. 추가는 '일괄 추가' 폼으로
         use_container_width=True,
         key="portfolio_editor",
         column_config={
@@ -397,6 +398,9 @@ def render_tab_portfolio():
     )
 
     edited_df = edited_df[_CORE_COLS].copy()
+    # 빈/nan 티커 행은 제거 (유령 'NAN' 종목 방지)
+    _tk_norm = edited_df["ticker"].astype(str).str.strip().str.lower()
+    edited_df = edited_df[~_tk_norm.isin(["", "nan", "none"])].reset_index(drop=True)
 
     # 변경사항이 있으면 저장 버튼 노출 (자동 저장 X — 사용자 명시 저장 시에만 CSV 반영).
     has_unsaved = not edited_df.equals(st.session_state.df_portfolio[_CORE_COLS])
