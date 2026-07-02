@@ -59,9 +59,28 @@ def _support_resistance(df: pd.DataFrame, lookback: int = 20):
     return float(recent["Low"].min()), float(recent["High"].max())
 
 
+# 섹터별 평균 선행 PER 기준 (yfinance 영문 sector명 → 대략치, 2025~26 보수적).
+# 선행 PER을 '절대 수준'이 아니라 '섹터 평균 대비'로 판정하기 위한 기준선.
+# (반도체·소프트웨어는 PER 30이 정상, 유틸리티는 20이 비쌈 — 절대 기준이면 억울/관대)
+_SECTOR_FWD_PE = {
+    "Technology": 27,
+    "Communication Services": 20,
+    "Consumer Cyclical": 22,
+    "Consumer Defensive": 20,
+    "Healthcare": 18,
+    "Financial Services": 13,
+    "Industrials": 20,
+    "Energy": 12,
+    "Utilities": 17,
+    "Basic Materials": 15,
+    "Real Estate": 35,  # FFO 기반이라 PER 왜곡 큼 — 참고용
+}
+_SECTOR_FWD_PE_DEFAULT = 20  # 미등록 섹터/섹터 없음 → 시장 평균
+
+
 def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
     """
-    밸류에이션 판정 (PER/PEG/목표가 괴리율 기반).
+    밸류에이션 판정 (PER/PEG/목표가 괴리율 + 섹터 상대 + 적자기업 P/S).
     Returns: {verdict: "저평가"|"적정"|"고평가"|"평가불가", score, note, ...}
     score: 양수=저평가(매수우위), 음수=고평가(매수신중)
     """
@@ -119,19 +138,47 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
         else:
             pts -= 10; notes.append(f"PEG {peg:.2f} (>2, 성장 대비 고평가)")
 
-    # 2) Forward PE (절대 수준): 섹터마다 다르지만 대략 기준
+    # 2) 선행 PER — 섹터 평균 대비 상대 판정 (절대 기준은 섹터마다 억울/관대)
     if isinstance(forward_pe, (int, float)) and forward_pe > 0:
-        if forward_pe < 15:
-            pts += 8; notes.append(f"선행 PER {forward_pe:.1f} (낮음)")
-        elif forward_pe < 25:
-            pts += 2; notes.append(f"선행 PER {forward_pe:.1f} (보통)")
-        elif forward_pe < 40:
-            pts -= 4; notes.append(f"선행 PER {forward_pe:.1f} (높음)")
+        sec_base = _SECTOR_FWD_PE.get(sector, _SECTOR_FWD_PE_DEFAULT)
+        sec_label = sector or "시장"
+        ratio = forward_pe / sec_base
+        if ratio < 0.8:
+            pts += 8; notes.append(f"선행 PER {forward_pe:.1f} ({sec_label} 평균 {sec_base} 대비 저평가)")
+        elif ratio < 1.1:
+            pts += 2; notes.append(f"선행 PER {forward_pe:.1f} ({sec_label} 평균 {sec_base} 수준)")
+        elif ratio < 1.5:
+            pts -= 4; notes.append(f"선행 PER {forward_pe:.1f} ({sec_label} 평균 {sec_base} 대비 높음)")
         else:
-            pts -= 10; notes.append(f"선행 PER {forward_pe:.1f} (매우 높음)")
+            pts -= 10; notes.append(f"선행 PER {forward_pe:.1f} ({sec_label} 평균 {sec_base} 대비 크게 높음)")
+        # 절대 극단 가드 — 60배↑는 섹터 무관 추가 감점 (성장 꺾이면 급락하는 멀티플 축소 리스크)
+        if forward_pe > 60:
+            pts -= 4; notes.append(f"선행 PER {forward_pe:.0f} >60 (멀티플 축소 리스크)")
         # 후행→선행 PER 개선 여부 (이익 성장 기대)
         if isinstance(trailing_pe, (int, float)) and trailing_pe > forward_pe * 1.1:
             pts += 4; notes.append("선행<후행 PER (이익 성장 기대)")
+
+    # 2-b) 적자/이익 미미 기업 — PER·PEG가 없으면 P/S(주가매출비율)로 대체 평가
+    _has_pe = ((isinstance(trailing_pe, (int, float)) and trailing_pe > 0)
+               or (isinstance(forward_pe, (int, float)) and forward_pe > 0)
+               or (isinstance(peg, (int, float)) and peg > 0))
+    ps_ratio = info.get("priceToSalesTrailing12Months")
+    if not _has_pe and isinstance(ps_ratio, (int, float)) and ps_ratio > 0:
+        rg = revenue_growth * 100 if isinstance(revenue_growth, (int, float)) else 0
+        if ps_ratio < 2:
+            pts += 8; notes.append(f"적자기업 P/S 평가: P/S {ps_ratio:.1f} (저평가)")
+        elif ps_ratio < 6:
+            pts += 2; notes.append(f"적자기업 P/S 평가: P/S {ps_ratio:.1f} (보통)")
+        elif ps_ratio < 12:
+            if rg >= 30:
+                notes.append(f"적자기업 P/S 평가: P/S {ps_ratio:.1f} (고성장 프리미엄, 매출 {rg:+.0f}%)")
+            else:
+                pts -= 6; notes.append(f"적자기업 P/S 평가: P/S {ps_ratio:.1f} (부담)")
+        else:
+            if rg >= 40:
+                pts -= 4; notes.append(f"적자기업 P/S 평가: P/S {ps_ratio:.1f} (고성장이나 부담, 매출 {rg:+.0f}%)")
+            else:
+                pts -= 12; notes.append(f"적자기업 P/S 평가: P/S {ps_ratio:.1f} (성장 대비 과도)")
 
     # 3) 애널리스트 목표가 괴리율
     upside = None
@@ -197,6 +244,7 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
         "trailing_pe": round(trailing_pe, 1) if isinstance(trailing_pe, (int, float)) else None,
         "forward_pe": round(forward_pe, 1) if isinstance(forward_pe, (int, float)) else None,
         "peg": round(peg, 2) if isinstance(peg, (int, float)) else None,
+        "ps_ratio": round(ps_ratio, 2) if isinstance(ps_ratio, (int, float)) else None,
         "target": round(target, 2) if isinstance(target, (int, float)) else None,
         "upside": round(upside, 1) if upside is not None else None,
         "engine_strong": engine_strong,
