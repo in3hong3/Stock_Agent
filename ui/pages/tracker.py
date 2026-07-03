@@ -93,49 +93,62 @@ def _render_accuracy_top_card():
     )
 
 
+_FUND_PER_ROW = 4  # 한 줄에 카드 몇 개 (모바일은 자동 1개씩 쌓임)
+
+
 def _render_fundamentals(signals, name_by_tk):
-    """내 보유종목 펀더멘탈 분석 — 시그널의 valuation을 재사용(규칙 기반·LLM 0)."""
+    """내 보유종목 펀더멘탈 분석 — 시그널의 valuation 재사용(규칙 기반·LLM 0). 카드 그리드."""
     if not signals:
         return
     st.markdown("### 🧬 펀더멘탈 분석 — 내 종목")
-    st.caption("실적 엔진(EPS) · 밸류(PEG·섹터 PER·적자 P/S) · 스마트머니(기관·내부자)를 종합 판정. "
-               "밸류점수 높은 순. (규칙 기반 — 무료·즉시)")
+    st.caption("실적(EPS) · 밸류(PEG·섹터 PER·적자 P/S) · 스마트머니(기관·내부자) 종합 판정 · "
+               "밸류점수 높은 순 · 카드 위에 마우스 올리면 판단 근거 (규칙 기반·무료)")
 
-    _emoji = {"저평가": "🟢", "적정": "🟡", "고평가": "🔴", "평가불가": "⚪"}
+    _color = {"저평가": "#00FFA3", "적정": "#FFD700", "고평가": "#FF4B4B", "평가불가": "#94A3B8"}
     ranked = sorted(signals, key=lambda s: -(s.get("valuation", {}).get("score", 0)))
-    for s in ranked:
-        v = s.get("valuation", {})
-        verdict = v.get("verdict", "평가불가")
-        tk = s["ticker"]
-        nm = name_by_tk.get(tk, tk)
-        with st.expander(f"{_emoji.get(verdict, '⚪')} {nm} ({tk}) — {verdict} "
-                         f"(밸류점수 {v.get('score', 0):+d})", expanded=False):
-            def _f(x, fmt, suf=""):
-                return f"{fmt.format(x)}{suf}" if isinstance(x, (int, float)) else "—"
-            c = st.columns(4)
-            c[0].metric("⚙️ EPS 성장", _f(v.get("eps_growth"), "{:+.0f}", "%"),
-                        help="분기 EPS 성장(YoY). 실적 '엔진' — 강하면 과열도 견딤")
-            c[1].metric("PEG", _f(v.get("peg"), "{:.2f}"), help="성장 대비 밸류. <1 저평가")
-            c[2].metric("선행 PER", _f(v.get("forward_pe"), "{:.1f}"), help="섹터 평균 대비로 판정")
-            c[3].metric("🎯 목표가 여력", _f(v.get("upside"), "{:+.0f}", "%"), help="애널리스트 목표가 괴리")
 
-            c2 = st.columns(3)
+    def _f(x, fmt, suf=""):
+        return f"{fmt.format(x)}{suf}" if isinstance(x, (int, float)) else "—"
+
+    for i in range(0, len(ranked), _FUND_PER_ROW):
+        cols = st.columns(_FUND_PER_ROW)
+        for col, s in zip(cols, ranked[i:i + _FUND_PER_ROW]):
+            v = s.get("valuation", {})
+            verdict = v.get("verdict", "평가불가")
+            vc = _color.get(verdict, "#94A3B8")
+            tk = s["ticker"]
+            nm = str(name_by_tk.get(tk, tk))[:16]
+
             inst, chg = v.get("inst_pct"), v.get("inst_change_pp")
-            inst_s = (f"{inst:.0f}%" + (f" ({chg:+.1f}%p)" if isinstance(chg, (int, float)) and abs(chg) >= 0.5 else "")
+            inst_s = (f"{inst:.0f}%" + (f" {chg:+.1f}%p" if isinstance(chg, (int, float)) and abs(chg) >= 0.5 else "")
                       if isinstance(inst, (int, float)) else "—")
-            c2[0].metric("🏛️ 기관 보유", inst_s, help="13F 보유율 + 최근 변화(%p)")
             nv = v.get("insider_net_value")
             if v.get("insider_buying"):
-                ins_s = "순매수 🟢" + (f" ${nv/1e6:.1f}M" if isinstance(nv, (int, float)) and nv else "")
+                ins = "순매수 🟢"
             elif isinstance(nv, (int, float)) and nv < 0:
-                ins_s = f"순매도 ${abs(nv)/1e6:.0f}M"
+                ins = "순매도"
             else:
-                ins_s = "—"
-            c2[1].metric("👤 내부자(90일)", ins_s, help="SEC Form 4 공개시장 매수/매도")
-            c2[2].metric("P/S", _f(v.get("ps_ratio"), "{:.1f}"), help="적자기업 대체 밸류(주가매출비율)")
+                ins = "—"
+            note = str(v.get("note", "")).replace('"', "'")
 
-            if v.get("note"):
-                st.caption("📋 판단 근거: " + v["note"])
+            col.markdown(
+                f"<div title=\"{note}\" style='background:linear-gradient(160deg,#16202A,#16181F);"
+                f"border:1px solid {vc}55;border-radius:12px;padding:11px 13px;margin-bottom:10px;'>"
+                f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                f"<b style='font-size:0.98rem;'>{tk}</b>"
+                f"<span style='background:{vc}22;color:{vc};padding:1px 8px;border-radius:4px;"
+                f"font-size:0.72rem;font-weight:700;'>{verdict}</span></div>"
+                f"<div style='color:#64748B;font-size:0.68rem;margin:2px 0 8px;'>"
+                f"{nm} · 점수 {v.get('score', 0):+d}</div>"
+                f"<div style='font-size:0.76rem;line-height:1.65;color:#CBD5E1;'>"
+                f"⚙️ EPS <b>{_f(v.get('eps_growth'), '{:+.0f}', '%')}</b> · "
+                f"PEG <b>{_f(v.get('peg'), '{:.2f}')}</b><br>"
+                f"📈 선행PER <b>{_f(v.get('forward_pe'), '{:.1f}')}</b> · "
+                f"🎯 <b>{_f(v.get('upside'), '{:+.0f}', '%')}</b><br>"
+                f"🏛️ 기관 <b>{inst_s}</b> · 👤 <b>{ins}</b>"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
     st.markdown("---")
 
 
