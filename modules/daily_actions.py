@@ -102,6 +102,23 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
     if signals is not None:
         holds = []
         watch = []  # 매수 신호지만 현재가가 진입가에서 아직 먼(위로) 종목 → '관찰'로
+
+        # 자금 배분 계획을 미리 계산 → 각 매수 카드에 '현금 N주'를 직접 표기.
+        # (상단 현금줄 + 카드가 같은 종목을 두 번 말해 '둘 다 사라'처럼 보이던 혼란 제거)
+        # 관찰(진입가 먼) 매수는 배분 대상에서 제외 → 계획과 카드가 일치.
+        def _far_buy(s):
+            return (s.get("action") in ("적극 매수", "분할 매수") and s.get("entry")
+                    and (s["price"] / s["entry"] - 1) * 100 > _BUY_NEAR_PCT)
+        plan = None
+        plan_qty: Dict[str, Any] = {}
+        try:
+            from modules.action_plan import build_action_plan
+            plan = build_action_plan([s for s in signals if not _far_buy(s)],
+                                     cash_usd, deploy_pct=100)
+            plan_qty = {b["ticker"]: b for b in plan["buys"]}
+        except Exception as e:
+            print(f"자금 계획 실패: {e}")
+
         for s in signals:
             tk = s["ticker"]
             hold_str = _holding_str(s, fx).replace("보유 ", "")
@@ -142,9 +159,13 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                 emoji, _, rest = ex.partition(" ")
                 lines.append((emoji, rest or ex))
 
-            # 현금 없는데 매수 신호면 '보류'로 솔직히 표시 (못 사니까)
-            if s["action"] in ("적극 매수", "분할 매수") and cash_usd <= 0:
-                lines.append(("⏸️", "현금 0 — 지금은 매수 보류 (현금 생기면 후보)"))
+            # 매수 카드엔 현금 배분 수량을 직접 표기 (상단 현금줄과 중복 인상 제거)
+            if s["action"] in ("적극 매수", "분할 매수"):
+                if cash_usd <= 0:
+                    lines.append(("⏸️", "현금 0 — 지금은 매수 보류 (현금 생기면 후보)"))
+                elif plan_qty.get(tk):
+                    _b = plan_qty[tk]
+                    lines.append(("💰", f"현금 배분: {_b['qty']}주 (약 ${_b['amount']:,.0f})"))
 
             is_strong = "🟢🟢" in s["icon"] or "🔴🔴" in s["icon"]
             # 관심종목(미보유)은 제목에 표시해 보유분과 구분
@@ -174,19 +195,18 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                 "text": f"홀드 {len(holds)}종목 — {', '.join(holds)} · 특별한 행동 불필요 (상세는 매매 시그널 참고)",
             })
 
-        # ── 0. 자금 계획 (현금 반영 — 맨 위에) ──
+        # ── 0. 자금 계획 (현금 반영 — 맨 위에, 위에서 계산한 plan 재사용) ──
         try:
-            from modules.action_plan import build_action_plan
-            plan = build_action_plan(signals, cash_usd, deploy_pct=100)
             buy_sigs = [s for s in signals if s["action"] in ("적극 매수", "분할 매수")]
-            if cash_usd and cash_usd > 0 and plan["buys"]:
-                items = ", ".join(f"{b['ticker']} {b['qty']}주" for b in plan["buys"][:5])
+            if plan and cash_usd and cash_usd > 0 and plan["buys"]:
+                # 상단은 '총 배분 요약'만 — 종목별 수량은 각 매수 카드에 있음(중복·이중매수 오인 방지)
                 actions.append({
                     "priority": 0, "icon": "💰", "kind": "general",
-                    "text": f"현금 ${cash_usd:,.0f} 실행 — {items} 매수 "
-                            f"(잔여 ${plan['leftover']:,.0f}) · 상세는 포트폴리오 탭",
+                    "text": f"현금 배분 계획 — ${cash_usd:,.0f} 중 ${plan['spent']:,.0f}을 "
+                            f"아래 매수 {len(plan['buys'])}종목에 나눠 담기 (잔여 ${plan['leftover']:,.0f}). "
+                            f"※ 각 카드의 '현금 배분 N주'가 실행안 — 카드와 별개 매수가 아닙니다",
                 })
-            elif cash_usd <= 0 and plan["sells"] and plan["buys"]:
+            elif plan and cash_usd <= 0 and plan["sells"] and plan["buys"]:
                 sell_s = ", ".join(f"{x['ticker']} {x['qty']}주" for x in plan["sells"])
                 buy_s = ", ".join(f"{b['ticker']} {b['qty']}주" for b in plan["buys"][:4])
                 actions.append({
