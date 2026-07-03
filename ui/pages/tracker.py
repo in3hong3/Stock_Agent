@@ -93,6 +93,52 @@ def _render_accuracy_top_card():
     )
 
 
+def _render_fundamentals(signals, name_by_tk):
+    """내 보유종목 펀더멘탈 분석 — 시그널의 valuation을 재사용(규칙 기반·LLM 0)."""
+    if not signals:
+        return
+    st.markdown("### 🧬 펀더멘탈 분석 — 내 종목")
+    st.caption("실적 엔진(EPS) · 밸류(PEG·섹터 PER·적자 P/S) · 스마트머니(기관·내부자)를 종합 판정. "
+               "밸류점수 높은 순. (규칙 기반 — 무료·즉시)")
+
+    _emoji = {"저평가": "🟢", "적정": "🟡", "고평가": "🔴", "평가불가": "⚪"}
+    ranked = sorted(signals, key=lambda s: -(s.get("valuation", {}).get("score", 0)))
+    for s in ranked:
+        v = s.get("valuation", {})
+        verdict = v.get("verdict", "평가불가")
+        tk = s["ticker"]
+        nm = name_by_tk.get(tk, tk)
+        with st.expander(f"{_emoji.get(verdict, '⚪')} {nm} ({tk}) — {verdict} "
+                         f"(밸류점수 {v.get('score', 0):+d})", expanded=False):
+            def _f(x, fmt, suf=""):
+                return f"{fmt.format(x)}{suf}" if isinstance(x, (int, float)) else "—"
+            c = st.columns(4)
+            c[0].metric("⚙️ EPS 성장", _f(v.get("eps_growth"), "{:+.0f}", "%"),
+                        help="분기 EPS 성장(YoY). 실적 '엔진' — 강하면 과열도 견딤")
+            c[1].metric("PEG", _f(v.get("peg"), "{:.2f}"), help="성장 대비 밸류. <1 저평가")
+            c[2].metric("선행 PER", _f(v.get("forward_pe"), "{:.1f}"), help="섹터 평균 대비로 판정")
+            c[3].metric("🎯 목표가 여력", _f(v.get("upside"), "{:+.0f}", "%"), help="애널리스트 목표가 괴리")
+
+            c2 = st.columns(3)
+            inst, chg = v.get("inst_pct"), v.get("inst_change_pp")
+            inst_s = (f"{inst:.0f}%" + (f" ({chg:+.1f}%p)" if isinstance(chg, (int, float)) and abs(chg) >= 0.5 else "")
+                      if isinstance(inst, (int, float)) else "—")
+            c2[0].metric("🏛️ 기관 보유", inst_s, help="13F 보유율 + 최근 변화(%p)")
+            nv = v.get("insider_net_value")
+            if v.get("insider_buying"):
+                ins_s = "순매수 🟢" + (f" ${nv/1e6:.1f}M" if isinstance(nv, (int, float)) and nv else "")
+            elif isinstance(nv, (int, float)) and nv < 0:
+                ins_s = f"순매도 ${abs(nv)/1e6:.0f}M"
+            else:
+                ins_s = "—"
+            c2[1].metric("👤 내부자(90일)", ins_s, help="SEC Form 4 공개시장 매수/매도")
+            c2[2].metric("P/S", _f(v.get("ps_ratio"), "{:.1f}"), help="적자기업 대체 밸류(주가매출비율)")
+
+            if v.get("note"):
+                st.caption("📋 판단 근거: " + v["note"])
+    st.markdown("---")
+
+
 def render_tab_tracker():
     from modules.issue_tracker import (
         get_portfolio_holdings,
@@ -158,6 +204,10 @@ def render_tab_tracker():
     except Exception as e:
         print(f"시그널 계산 실패: {e}")
 
+    # ── 🧬 펀더멘탈 분석 (내 보유종목 — 밸류에이션 분석관 대체) ──
+    if signal_result and signal_result.get("signals"):
+        _render_fundamentals(signal_result["signals"],
+                             {h["ticker"]: (h.get("name") or h["ticker"]) for h in tracked})
 
     # ── 📖 매수 기법 설명 (상세 시그널·오늘 할 일이 공통으로 쓰는 규칙) ──
     with st.expander("📖 매수 기법 — 이 시그널·오늘 할 일이 쓰는 규칙", expanded=False):
