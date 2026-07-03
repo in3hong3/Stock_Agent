@@ -39,6 +39,10 @@ _STANCE_TEXT = {
 }
 
 
+# 매수 신호를 '오늘 할 일'로 올릴 진입가 근접 기준 (현재가가 진입가보다 이 %↑ 높으면 관찰로)
+_BUY_NEAR_PCT = 3.0
+
+
 def _stance_msg(situation: str, stance: str) -> str:
     return _STANCE_TEXT.get(situation, {}).get(stance, _STANCE_TEXT.get(situation, {}).get("neutral", ""))
 
@@ -97,6 +101,7 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
     # ── 2. 종목 시그널 (종목별 1카드로 묶음) ──
     if signals is not None:
         holds = []
+        watch = []  # 매수 신호지만 현재가가 진입가에서 아직 먼(위로) 종목 → '관찰'로
         for s in signals:
             tk = s["ticker"]
             hold_str = _holding_str(s, fx).replace("보유 ", "")
@@ -108,6 +113,13 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                 tag = f"{tk}({s['adj_score']:+.0f}" + (f", {meta})" if meta else ")")
                 holds.append(tag)
                 continue
+
+            # 매수 신호인데 현재가가 진입가보다 충분히 높으면(아직 눌림 안 옴) → '오늘 할 일' 대신 관찰
+            if s["action"] in ("적극 매수", "분할 매수") and s.get("entry"):
+                dist = (s["price"] / s["entry"] - 1) * 100
+                if dist > _BUY_NEAR_PCT:
+                    watch.append((s, dist))
+                    continue
 
             # 카드 본문 라인들 (이모지, 텍스트)
             lines = []
@@ -143,6 +155,17 @@ def build_actions(snap_df: pd.DataFrame, tickers: List[str],
                 "priority": 1 if is_strong else 2, "kind": "stock",
                 "icon": s["icon"], "title": _title, "meta": meta,
                 "lines": lines,
+            })
+
+        if watch:
+            watch.sort(key=lambda x: x[1])  # 진입가에 가까운 순
+            _items = ", ".join(
+                f"{s['ticker']}{'(관심)' if s.get('watchlist') else ''} 진입 {s['entry']:,.2f}·현재 {s['price']:,.2f}(+{d:.1f}%)"
+                for s, d in watch[:8]
+            )
+            actions.append({
+                "priority": 4, "icon": "👀", "kind": "general",
+                "text": f"관찰 {len(watch)}종목 (매수 자리 대기 — 진입가 근접 시 매수) — {_items}",
             })
 
         if holds:
