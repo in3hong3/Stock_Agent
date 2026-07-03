@@ -107,6 +107,7 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
 
     # 0) 실적 엔진 — EPS 성장 추세 (올랜도 킴식: 엔진이 강하면 차트 과열도 견딘다)
     eps_g = earnings_q_growth if isinstance(earnings_q_growth, (int, float)) else earnings_growth
+    eps_data_missing = not isinstance(eps_g, (int, float))  # EPS 성장 데이터 자체가 없음(스핀오프·적자 등)
     engine_strong = False
     engine_note = ""
     if isinstance(eps_g, (int, float)):
@@ -228,6 +229,14 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
     if ins["note"]:
         notes.append(ins["note"])
     insider_buying = ins["buying"]
+
+    # EPS 성장 데이터가 없으면(실적 엔진 침묵) '저평가' 확신 불가 → 상방 제한 + 근거부족 명시.
+    # (매출·PER·목표가만으론 성장주 '저평가 함정'을 못 거름 — INTC/SNDK 류)
+    # 단 고평가(음수) 쪽은 그대로 둔다: PER 과열 등 경고는 EPS 없이도 유효.
+    if eps_data_missing:
+        if pts > 8:
+            pts = 8  # 실적 근거 없이는 저평가로 확정하지 않음 (저평가 임계 12 밑으로 제한)
+        notes.append("⚠️ 실적(EPS) 성장 데이터 없음 — 밸류 근거 제한적 (섹터·PER·매출로만 판정)")
 
     # 종합 판정
     if not notes:
