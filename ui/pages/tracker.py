@@ -101,8 +101,10 @@ def _render_fundamentals(signals, name_by_tk):
     if not signals:
         return
     st.markdown("### 🧬 펀더멘탈 분석 — 내 종목")
-    st.caption("실적(EPS) · 밸류(PEG·섹터 PER·적자 P/S) · 스마트머니(기관·내부자) 종합 판정 · "
-               "밸류점수 높은 순 · 카드 위에 마우스 올리면 판단 근거 (규칙 기반·무료)")
+    st.caption("실적(EPS)·밸류(PEG·섹터 PER)·스마트머니(🏛️기관·👤내부자) 종합 판정 · 밸류점수 높은 순 · "
+               "카드에 마우스 올리면 판단 근거 (규칙 기반·무료)")
+    st.caption("🏛️ 기관 보유율(+변화) · 👤 내부자(임원)가 **자기 돈으로 매수**했으면 강세 신호로 표시 "
+               "— *내부자 매도는 사유가 다양해 노이즈라 표시 안 함(당신더러 팔라는 뜻 아님)*")
 
     _color = {"저평가": "#00FFA3", "적정": "#FFD700", "고평가": "#FF4B4B", "평가불가": "#94A3B8"}
     ranked = sorted(signals, key=lambda s: -(s.get("valuation", {}).get("score", 0)))
@@ -122,13 +124,13 @@ def _render_fundamentals(signals, name_by_tk):
             inst, chg = v.get("inst_pct"), v.get("inst_change_pp")
             inst_s = (f"{inst:.0f}%" + (f" {chg:+.1f}%p" if isinstance(chg, (int, float)) and abs(chg) >= 0.5 else "")
                       if isinstance(inst, (int, float)) else "—")
+            # 내부자: '매수'만 강세 신호로 표시. 매도는 노이즈라 숨김(오해 방지).
             nv = v.get("insider_net_value")
             if v.get("insider_buying"):
-                ins = "순매수 🟢"
-            elif isinstance(nv, (int, float)) and nv < 0:
-                ins = "순매도"
+                _amt = f" ${nv/1e6:.0f}M" if isinstance(nv, (int, float)) and nv else ""
+                ins = f"<span style='color:#00FFA3;font-weight:700;'>매수🟢{_amt}</span>"
             else:
-                ins = "—"
+                ins = "<span style='color:#64748B;'>특이신호 없음</span>"
             note = str(v.get("note", "")).replace('"', "'")
 
             col.markdown(
@@ -145,7 +147,8 @@ def _render_fundamentals(signals, name_by_tk):
                 f"PEG <b>{_f(v.get('peg'), '{:.2f}')}</b><br>"
                 f"📈 선행PER <b>{_f(v.get('forward_pe'), '{:.1f}')}</b> · "
                 f"🎯 <b>{_f(v.get('upside'), '{:+.0f}', '%')}</b><br>"
-                f"🏛️ 기관 <b>{inst_s}</b> · 👤 <b>{ins}</b>"
+                f"🏛️ 기관 <b>{inst_s}</b><br>"
+                f"👤 내부자 {ins}"
                 f"</div></div>",
                 unsafe_allow_html=True,
             )
