@@ -114,13 +114,25 @@ def detect_buy_timings(stance: str = "aggressive", update_state: bool = True) ->
 
 
 def format_alert(signals: List[Dict[str, Any]]) -> str:
-    """매수 타이밍 시그널들을 카카오 메시지 텍스트로."""
+    """매수 타이밍 시그널들을 카카오 메시지 텍스트로.
+    현재가 vs 진입가 괴리를 함께 표기 — 이미 진입가 위로 벌어졌으면 '추격 금지·눌림 대기'."""
+    from modules.daily_actions import _BUY_NEAR_PCT  # 진입가 근접 기준(오늘 할 일과 동일)
+
     lines = ["🎯 매수 타이밍 포착"]
     for s in signals:
         block = f"\n[{s.get('alert_kind', '매수')}] {s['ticker']} → {s['action']} · {s.get('setup', '')}"
-        if s.get("entry"):
-            block += (f"\n   진입 {s['entry']:,.2f} · 손절 {s['stop']:,.2f} · "
-                      f"목표 {s['target']:,.2f} (1:{s['rr']})")
+        entry = s.get("entry")
+        price = float(s.get("price") or 0)
+        if entry:
+            gap = (price / float(entry) - 1) * 100 if price > 0 else 0
+            if gap > _BUY_NEAR_PCT:
+                tag = f"⚠️ 이미 +{gap:.1f}% — 추격 금지, {entry:,.2f} 눌림 대기"
+            elif gap < -1:
+                tag = f"🟢 진입가 아래({gap:+.1f}%) — 매수 유리"
+            else:
+                tag = f"🟢 진입가 근접({gap:+.1f}%) — 분할매수 가능"
+            block += f"\n   현재 {price:,.2f} · 진입목표 {entry:,.2f} · {tag}"
+            block += f"\n   손절 {s['stop']:,.2f} · 목표 {s['target']:,.2f} (1:{s['rr']})"
         v = s.get("valuation", {})
         if v.get("verdict"):
             block += f"\n   밸류 {v['verdict']}"
