@@ -275,6 +275,37 @@ def render_chat_sources(sources: List[Dict[str, Any]]):
             """)
 
 
+def _get_accounts() -> dict:
+    """계정 목록 (환경변수 또는 기본값)."""
+    import os
+    return {
+        os.getenv("APP_USERNAME", "admin"): os.getenv("APP_PASSWORD", "admin"),
+        "song": os.getenv("APP_PASSWORD_SONG", "song"),
+    }
+
+
+def _auth_token(username: str) -> str:
+    """비밀번호 기반 서명 토큰 — URL에 담아 새로고침 후 로그인 복원용.
+    비밀번호 자체는 노출 안 되고(해시), 비번을 모르면 위조 불가."""
+    import hashlib
+    pw = _get_accounts().get(username, "")
+    return hashlib.sha256(f"{username}:{pw}:stockagent-v1".encode()).hexdigest()[:20]
+
+
+def try_restore_session():
+    """URL 쿼리파라미터의 서명 토큰으로 로그인 상태 복원 (새로고침 재로그인 방지)."""
+    if st.session_state.get("authenticated"):
+        return
+    try:
+        u = st.query_params.get("u")
+        t = st.query_params.get("t")
+    except Exception:
+        return
+    if u and t and u in _get_accounts() and t == _auth_token(u):
+        st.session_state.authenticated = True
+        st.session_state.user_id = u
+
+
 def render_login_page():
     """전문적인 다크 모드 로그인 페이지 렌더링"""
     st.markdown("""
@@ -365,15 +396,13 @@ def render_login_page():
             submit = st.form_submit_button("Sign In")
 
             if submit:
-                import os
-                # 계정 목록: 환경변수 또는 기본값
-                accounts = {
-                    os.getenv("APP_USERNAME", "admin"): os.getenv("APP_PASSWORD", "admin"),
-                    "song": os.getenv("APP_PASSWORD_SONG", "song"),
-                }
+                accounts = _get_accounts()
                 if username in accounts and password == accounts[username]:
                     st.session_state.authenticated = True
                     st.session_state.user_id = username  # 사용자 ID 저장
+                    # 새로고침해도 유지되도록 URL에 서명 토큰 저장 (비번 노출 없음)
+                    st.query_params["u"] = username
+                    st.query_params["t"] = _auth_token(username)
                     st.rerun()
                 else:
                     st.error("계정 정보가 일치하지 않습니다.")

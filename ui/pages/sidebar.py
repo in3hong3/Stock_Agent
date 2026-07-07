@@ -183,6 +183,7 @@ def render_side_panel(fg_index, fg_status, status_text, point_color):
                   "_signal_result", "_pred_recorded", "reload_csv",
                   "_auto_price_fill_done", "_auto_price_fill_done_portfolio"):
             st.session_state.pop(k, None)
+        st.query_params.clear()  # URL 로그인 토큰 제거 → 새로고침해도 로그인 유지 안 됨
         st.cache_data.clear()  # 시그널/스냅샷 등 가격 의존 캐시 무효화
         st.rerun()
     st.divider()

@@ -13,7 +13,7 @@ if mobile_css_path.exists():
 
 from config.settings import PAGE_ICON, AGENT_REGISTRY
 from ui.theme import get_cached_fear_greed_index, get_heatmap_color, apply_theme, get_point_color
-from ui.components import render_ticker_tape, render_login_page
+from ui.components import render_ticker_tape, render_login_page, try_restore_session
 
 from agents.rag_agent import RAGAgent
 from agents.technical_agent import TechnicalAgent
@@ -77,6 +77,8 @@ def main():
 
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
+    # 새로고침 시 URL 서명 토큰으로 로그인 복원 (재로그인 방지)
+    try_restore_session()
     if not st.session_state.authenticated:
         render_login_page()
         st.stop()
