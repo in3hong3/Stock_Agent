@@ -19,3 +19,4 @@ scipy
 rank_bm25
 pinecone
 anthropic
+streamlit-cookies-controller

@@ -285,28 +285,65 @@ def _get_accounts() -> dict:
 
 
 def _auth_token(username: str) -> str:
-    """비밀번호 기반 서명 토큰 — URL에 담아 새로고침 후 로그인 복원용.
+    """비밀번호 기반 서명 토큰 — 쿠키에 담아 새로고침 후 로그인 복원용.
     비밀번호 자체는 노출 안 되고(해시), 비번을 모르면 위조 불가."""
     import hashlib
     pw = _get_accounts().get(username, "")
     return hashlib.sha256(f"{username}:{pw}:stockagent-v1".encode()).hexdigest()[:20]
 
 
-def try_restore_session():
-    """URL 쿼리파라미터의 서명 토큰으로 로그인 상태 복원 (새로고침 재로그인 방지)."""
-    if st.session_state.get("authenticated"):
+_AUTH_COOKIE = "sa_auth"
+
+
+def get_cookie_controller():
+    """CookieController 1개 생성. run당 한 번만 만들어 여기저기 넘겨 쓸 것
+    (같은 run에 여러 개 만들면 컴포넌트 키 충돌). 실패 시 None → 쿠키 미사용."""
+    try:
+        from streamlit_cookies_controller import CookieController
+        return CookieController()
+    except Exception as e:
+        print(f"쿠키 컨트롤러 생성 실패: {e}")
+        return None
+
+
+def try_restore_session(controller):
+    """쿠키의 서명 토큰으로 로그인 상태 복원 (새로고침 재로그인 방지)."""
+    if st.session_state.get("authenticated") or controller is None:
         return
     try:
-        u = st.query_params.get("u")
-        t = st.query_params.get("t")
+        raw = controller.get(_AUTH_COOKIE)
     except Exception:
         return
-    if u and t and u in _get_accounts() and t == _auth_token(u):
-        st.session_state.authenticated = True
-        st.session_state.user_id = u
+    if raw and ":" in str(raw):
+        u, t = str(raw).split(":", 1)
+        if u in _get_accounts() and t == _auth_token(u):
+            st.session_state.authenticated = True
+            st.session_state.user_id = u
 
 
-def render_login_page():
+def set_login_cookie(controller, username: str):
+    """로그인 성공 시 30일 유지 쿠키 저장."""
+    if controller is None:
+        return
+    try:
+        from datetime import datetime, timedelta
+        controller.set(_AUTH_COOKIE, f"{username}:{_auth_token(username)}",
+                       expires=datetime.now() + timedelta(days=30))
+    except Exception as e:
+        print(f"로그인 쿠키 저장 실패: {e}")
+
+
+def clear_login_cookie(controller):
+    """로그아웃 시 쿠키 제거."""
+    if controller is None:
+        return
+    try:
+        controller.remove(_AUTH_COOKIE)
+    except Exception:
+        pass
+
+
+def render_login_page(controller=None):
     """전문적인 다크 모드 로그인 페이지 렌더링"""
     st.markdown("""
     <style>
@@ -400,9 +437,7 @@ def render_login_page():
                 if username in accounts and password == accounts[username]:
                     st.session_state.authenticated = True
                     st.session_state.user_id = username  # 사용자 ID 저장
-                    # 새로고침해도 유지되도록 URL에 서명 토큰 저장 (비번 노출 없음)
-                    st.query_params["u"] = username
-                    st.query_params["t"] = _auth_token(username)
+                    set_login_cookie(controller, username)  # 새로고침 유지 (쿠키, URL 노출 없음)
                     st.rerun()
                 else:
                     st.error("계정 정보가 일치하지 않습니다.")
