@@ -258,6 +258,8 @@ def get_valuation(ticker: str, price: float) -> Dict[str, Any]:
         "upside": round(upside, 1) if upside is not None else None,
         "engine_strong": engine_strong,
         "eps_growth": round(eps_g * 100, 1) if isinstance(eps_g, (int, float)) else None,
+        "eps_missing": eps_data_missing,  # 수익 미창출/이력 없음 (dip 매수 게이트용)
+        "rev_growth": round(revenue_growth * 100, 1) if isinstance(revenue_growth, (int, float)) else None,
         "inst_pct": inst_pct, "insider_pct": insider_pct, "inst_change_pp": inst_chg,
         "inst_accumulating": inst_accumulating,
         "insider_buying": insider_buying,
@@ -439,6 +441,8 @@ def analyze_stock(ticker: str, quantity: float = 0, avg_price: float = 0) -> Dic
         inst_change_pp=valuation.get("inst_change_pp"),
         insider_buying=valuation.get("insider_buying", False),
         insider_net_value=valuation.get("insider_net_value"),
+        eps_missing=valuation.get("eps_missing", False),
+        rev_growth=valuation.get("rev_growth"),
     )
 
     return {
@@ -475,6 +479,14 @@ def _identify_setup(**k) -> tuple:
     inst_change_pp = k.get("inst_change_pp")
     insider_buying = k.get("insider_buying", False)    # 내부자 공개시장 순매수 (Form 4)
     insider_net_value = k.get("insider_net_value")
+    eps_missing = k.get("eps_missing", False)          # 수익 미창출 (실적 플로어 없음)
+    rev_growth = k.get("rev_growth")
+
+    # 수익 없는 종목의 dip 매수 위험도 — 실적 플로어가 없으니 '대체 플로어'가 있어야 눌림 매수 정당.
+    # 대체 플로어 = 매출 고성장(≥30%) 또는 스마트머니(기관 순매수·내부자 매수).
+    _rev_high = isinstance(rev_growth, (int, float)) and rev_growth >= 30
+    _has_floor = _rev_high or inst_accumulating or insider_buying
+    knife_risk = eps_missing and not _has_floor  # 수익X + 받침X → 떨어지는 칼날
 
     score = 0
     reasons = []
@@ -571,6 +583,15 @@ def _identify_setup(**k) -> tuple:
             score -= 5; reasons.append(("•", f"MA50 아래, 방향성 불명확 (RSI {rsi:.0f}, ADX {adx:.0f})"))
         if trend_regime == "횡보장":
             reasons.append(("•", f"ADX {adx:.0f} 횡보장 — 박스권 매매 외 신규 진입 자제"))
+
+    # ── 수익 없는 종목의 dip 매수 게이트 (떨어지는 칼날 방어) ──
+    # 눌림목·과매도 반등은 '실적 플로어'가 있는 종목에서 유효. 수익 미창출인데
+    # 매출 고성장·스마트머니 받침도 없으면 눌림이 하락 지속일 수 있어 매수 감쇠.
+    # (돌파 등 '강세 확인' 셋업은 그대로 — 수익 없는 종목은 강세 추종이 정석)
+    if knife_risk and ("눌림목" in setup or "과매도" in setup) and score > 5:
+        score = 5
+        reasons.append(("⚠️", "수익 미창출 + 매출 고성장·스마트머니 받침 없음 — 실적 플로어가 없어 "
+                              "눌림이 하락 지속일 수 있음(칼날 주의). 눌림 매수 보류, 돌파·강세 확인 후 진입 권장"))
 
     # ── 공통: MACD 히스토그램 다이버전스 (올랜도 킴식 선제 경고) ──
     # 주가는 오르는데(또는 보합) 히스토그램 에너지가 줄어듦 → 추세 약화 예고
