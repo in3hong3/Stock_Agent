@@ -18,17 +18,32 @@ ResNet18 전이학습 모델. (참고: Jiang, Kelly, Xiu — *(Re-)Imaging Price
 4. **지표는 AUC** — val AUC 0.52~0.55면 신호로 유의미, 0.50 근처면 실패.
    90% 정확도가 나오면 좋은 게 아니라 누수를 의심할 것.
 
-## 실행 순서
+## 실행 순서 (전부 로컬 GPU 노트북에서)
 
 ```bash
 python ml/check_gpu.py                      # 1. GPU 인식 확인
 python ml/build_dataset.py --max-tickers 3  # 2. 소량 테스트
 python ml/build_dataset.py                  # 3. 코스피200 전체 (수 시간 소요)
 python ml/train.py                          # 4. 학습 → ml/models/best_resnet18.pth
+python ml/predict.py                        # 5. 관심종목 추론 → ml/signals/latest.json
 ```
 
 설정(윈도우/호라이즌/임계값/기간)은 전부 [config.py](config.py).
 데이터셋 명세는 `ml/dataset/manifest.csv` (종목·날짜·실현수익률·라벨·split).
+
+## 서버 연동 — 표시 전용 (torch는 서버에 안 올라감)
+
+Oracle 서버(RAM 1GB)는 PyTorch를 못 올리므로 **추론은 로컬에서만** 한다.
+
+```
+[로컬 GPU] predict.py → ml/signals/latest.json (차트 썸네일 base64 임베드)
+   → git commit & push  → [서버] git pull  → Streamlit '🧠 AI 신호' 탭이 JSON을 읽어 표시
+```
+
+- 탭 코드는 [../ui/pages/ml_signals.py](../ui/pages/ml_signals.py) — `json/pandas/streamlit`만
+  import (torch/mplfinance 없음). 서버에서 안전.
+- `latest.json`은 작아서(수십 KB) git에 커밋해 배포에 태운다. `dataset/`·`models/`는 gitignore.
+- 신호를 갱신하려면: 로컬에서 `predict.py` 재실행 → `ml/signals/latest.json` 커밋·push.
 
 ## 의존성 (로컬 전용 — 서버 requirements에 넣지 말 것)
 

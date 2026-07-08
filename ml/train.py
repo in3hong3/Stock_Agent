@@ -113,7 +113,7 @@ def main() -> None:
             best_auc, patience = val_auc, 0
             torch.save({"state_dict": model.state_dict(),
                         "class_to_idx": train_ds.class_to_idx,
-                        "img_size": IMG_SIZE, "val_auc": best_auc}, best_path)
+                        "img_size": IMG_SIZE, "val_auc": float(best_auc)}, best_path)
             print(f"         └ best 갱신 → {best_path.name} 저장")
         else:
             patience += 1

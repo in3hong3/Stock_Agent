@@ -35,6 +35,7 @@ from ui.pages.portfolio import render_tab_portfolio
 from ui.pages.alerts import render_tab_alerts
 from ui.pages.backtest import render_tab_backtest
 from ui.pages.hot_sectors import render_tab_hot_sectors
+from ui.pages.ml_signals import render_tab_ml_signals
 
 
 def initialize_agents():
@@ -170,13 +171,14 @@ def main():
             "📒 매매일지",
             "🔔 가격알림",
             "🧪 백테스트",
+            "🧠 AI 신호",
         ]
         if is_admin:
             tab_labels.append("🔧 관리자")
 
         all_tabs = st.tabs(tab_labels)
         (tab_tracker, tab_paper, tab_hot, tab_analysts, tab_portfolio,
-         tab_journal, tab_alerts, tab_backtest) = all_tabs[:8]
+         tab_journal, tab_alerts, tab_backtest, tab_ml) = all_tabs[:9]
 
         with tab_tracker:
             render_tab_tracker()
@@ -210,8 +212,10 @@ def main():
             render_tab_alerts()
         with tab_backtest:
             render_tab_backtest()
+        with tab_ml:
+            render_tab_ml_signals()
         if is_admin:
-            with all_tabs[8]:
+            with all_tabs[9]:
                 render_tab_admin()
 
 

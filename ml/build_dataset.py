@@ -17,25 +17,15 @@ sys.stdout.reconfigure(encoding="utf-8")  # Windows cp949 콘솔 대응
 
 import time
 
-import matplotlib
-
-matplotlib.use("Agg")  # 창 안 띄우고 파일로만 렌더링
-
 import FinanceDataReader as fdr
-import matplotlib.pyplot as plt
-import mplfinance as mpf
 import pandas as pd
 from tqdm import tqdm
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
+from chart import save_png
 from config import (DATASET_DIR, HORIZON, IMG_SIZE, MANIFEST_CSV, MAX_TICKERS,
                     RET_THRESHOLD, START_DATE, STRIDE, TRAIN_END, VAL_START,
                     WINDOW)
-
-_MC = mpf.make_marketcolors(up="red", down="blue", edge="inherit",
-                            wick="inherit", volume="inherit")
-_STYLE = mpf.make_mpf_style(marketcolors=_MC, facecolor="white",
-                            figcolor="white", gridstyle="")
 
 
 def kospi_top_tickers(n: int) -> list[tuple[str, str]]:
@@ -49,14 +39,6 @@ def kospi_top_tickers(n: int) -> list[tuple[str, str]]:
 def fetch_ohlcv(ticker: str) -> pd.DataFrame:
     df = fdr.DataReader(ticker, START_DATE)
     return df[["Open", "High", "Low", "Close", "Volume"]].dropna()
-
-
-def save_chart_image(win_df: pd.DataFrame, path) -> None:
-    fig, _ = mpf.plot(win_df, type="candle", style=_STYLE, volume=True,
-                      axisoff=True, returnfig=True, scale_padding=0,
-                      figsize=(IMG_SIZE / 100, IMG_SIZE / 100))
-    fig.savefig(path, dpi=100)
-    plt.close(fig)
 
 
 def split_of(base_date: pd.Timestamp) -> str | None:
@@ -85,7 +67,7 @@ def build_for_ticker(ticker: str, name: str) -> list[dict]:
         out_dir.mkdir(parents=True, exist_ok=True)
         path = out_dir / f"{ticker}_{base_date:%Y%m%d}.png"
         if not path.exists():  # 재실행 시 이미 만든 이미지는 건너뜀
-            save_chart_image(win, path)
+            save_png(win, path, IMG_SIZE)
         rows.append({"ticker": ticker, "name": name,
                      "date": f"{base_date:%Y-%m-%d}", "fwd_ret": round(fwd_ret, 5),
                      "label": label, "split": split, "path": str(path)})
