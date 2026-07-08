@@ -3,6 +3,10 @@
 과거 60거래일 캔들차트 이미지를 보고 **5거래일 뒤 상승 확률**을 예측하는
 ResNet18 전이학습 모델. (참고: Jiang, Kelly, Xiu — *(Re-)Imaging Price Trends*)
 
+**학습 유니버스 = S&P500 (미국주식).** 사용자 포트폴리오가 미국주라 분포를 맞춘다.
+종목별 모델이 아니라 수백 종목에서 배운 단일 모델 → 보유 종목 예측에 적용.
+(레버리지 ETF 등 SOXL 같은 종목은 일반주와 차트 동역학이 달라 예측이 어긋날 수 있음.)
+
 ⚠ **로컬(RTX 5060 노트북) 전용.** Oracle 서버(RAM 1GB)에서는 PyTorch 로드 불가 —
 서버 연동이 필요해지면 로컬 추론 후 결과만 전송하거나 ONNX 변환으로 간다.
 
@@ -23,7 +27,7 @@ ResNet18 전이학습 모델. (참고: Jiang, Kelly, Xiu — *(Re-)Imaging Price
 ```bash
 python ml/check_gpu.py                      # 1. GPU 인식 확인
 python ml/build_dataset.py --max-tickers 3  # 2. 소량 테스트
-python ml/build_dataset.py                  # 3. 코스피200 전체 (수 시간 소요)
+python ml/build_dataset.py                  # 3. S&P500 전체 (수 시간 소요)
 python ml/train.py                          # 4. 학습 → ml/models/best_resnet18.pth
 python ml/predict.py                        # 5. 관심종목 추론 → ml/signals/latest.json
 ```

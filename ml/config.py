@@ -15,8 +15,9 @@ MANIFEST_CSV = ML_DIR / "dataset" / "manifest.csv"
 MODELS_DIR = ML_DIR / "models"
 
 # ── 유니버스 / 기간 ───────────────────────────────────────
-MAX_TICKERS = 200                          # 코스피200 중 앞에서 N개만 (테스트 시 줄여서)
-START_DATE = "20200101"                    # 다운로드 시작일 (pykrx 형식)
+# 미국주식(S&P500)으로 학습 — 사용자 포트폴리오가 미국주라 분포를 맞춘다.
+MAX_TICKERS = 500                          # S&P500 중 앞에서 N개 (줄이면 학습 빨라짐)
+START_DATE = "2020-01-01"                  # 다운로드 시작일
 TRAIN_END = "2024-12-31"                   # 이 날짜까지 기준일 → train
 VAL_START = "2025-01-15"                   # 이 날짜부터 기준일 → val (사이 구간은 embargo)
 

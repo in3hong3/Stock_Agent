@@ -1,4 +1,4 @@
-"""2~4단계: 코스피200 데이터 다운로드 → 미래 수익률 라벨 → 차트 이미지 데이터셋 생성.
+"""2~4단계: S&P500 데이터 다운로드 → 미래 수익률 라벨 → 차트 이미지 데이터셋 생성.
 
 - 입력 이미지: 기준일까지의 과거 WINDOW 거래일 캔들 + 거래량 (미래 데이터 절대 포함 안 함)
 - 라벨: HORIZON 거래일 뒤 종가 수익률 > RET_THRESHOLD → 'up', 아니면 'down'
@@ -6,7 +6,7 @@
   사이 구간은 라벨 누수 방지용 embargo로 버림)
 
 사용:
-    python ml/build_dataset.py                     # 코스피200 전체
+    python ml/build_dataset.py                     # S&P500 전체
     python ml/build_dataset.py --max-tickers 3     # 테스트용 소량
 """
 
@@ -28,12 +28,10 @@ from config import (DATASET_DIR, HORIZON, IMG_SIZE, MANIFEST_CSV, MAX_TICKERS,
                     WINDOW)
 
 
-def kospi_top_tickers(n: int) -> list[tuple[str, str]]:
-    """시가총액 상위 n개 (보통주만, 스팩 제외). [(코드, 종목명), ...]"""
-    krx = fdr.StockListing("KOSPI")  # Marcap 내림차순 정렬되어 옴
-    krx = krx[krx["Code"].str.endswith("0")]          # 우선주 제외
-    krx = krx[~krx["Name"].str.contains("스팩")]
-    return list(krx[["Code", "Name"]].head(n).itertuples(index=False, name=None))
+def sp500_tickers(n: int) -> list[tuple[str, str]]:
+    """S&P500 구성종목 앞 n개. [(심볼, 종목명), ...]"""
+    sp = fdr.StockListing("S&P500")
+    return list(sp[["Symbol", "Name"]].head(n).itertuples(index=False, name=None))
 
 
 def fetch_ohlcv(ticker: str) -> pd.DataFrame:
@@ -82,7 +80,7 @@ def main() -> None:
     args = ap.parse_args()
     STRIDE = args.stride
 
-    tickers = kospi_top_tickers(args.max_tickers)
+    tickers = sp500_tickers(args.max_tickers)
     print(f"대상 종목 {len(tickers)}개 · 윈도우 {WINDOW}일 · 라벨 {HORIZON}일 뒤 "
           f"수익률 > {RET_THRESHOLD:+.1%} · stride {STRIDE}")
 

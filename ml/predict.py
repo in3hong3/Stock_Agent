@@ -16,7 +16,7 @@ import base64
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")  # Windows cp949 콘솔 대응
@@ -27,7 +27,8 @@ import torch.nn.functional as F
 from PIL import Image
 from torchvision import models, transforms
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))    # ml/ 우선 (chart, config)
+sys.path.append(str(Path(__file__).resolve().parent.parent))  # 루트는 뒤 (modules — 루트 config 패키지와 충돌 방지)
 from chart import to_png_bytes
 from config import HORIZON, IMG_SIZE, MODELS_DIR, WINDOW
 
@@ -41,18 +42,16 @@ _TF = transforms.Compose([
 ])
 
 
-def to_fdr_code(ticker: str) -> str | None:
-    """yfinance 티커('005930.KS')를 FDR 코드('005930')로. 한국 종목만 지원."""
+def to_symbol(ticker: str) -> str | None:
+    """티커를 FDR 미국 심볼로. 이 모델은 S&P500(미국)으로 학습 → 미국 종목만 지원."""
     t = ticker.strip().upper()
-    if t.endswith((".KS", ".KQ")):
-        return t[:-3]
-    if t.isdigit() and len(t) == 6:
-        return t
-    return None  # 미국주 등은 이 모델(한국 차트 학습) 대상 아님
+    if t.endswith((".KS", ".KQ")) or (t.isdigit() and len(t) == 6):
+        return None  # 한국 종목은 이 모델(미국 차트 학습) 대상 아님 → 건너뜀
+    return t  # 미국 심볼 (AAPL, GOOGL 등)
 
 
 def load_watchlist_tickers() -> list[tuple[str, str]]:
-    """admin 관심종목 + 보유종목 → [(FDR코드, 종목명)] (한국 종목만, 중복 제거)."""
+    """admin 관심종목 + 보유종목 → [(미국심볼, 종목명)] (미국 종목만, 중복 제거)."""
     os.environ.setdefault("STOCK_AGENT_USER", "admin")
     pairs, seen = [], set()
     try:
@@ -64,10 +63,12 @@ def load_watchlist_tickers() -> list[tuple[str, str]]:
         print(f"관심종목 로드 실패 → 빈 목록: {e}")
         return []
     for tk, name in raw:
-        code = to_fdr_code(tk)
-        if code and code not in seen:
-            seen.add(code)
-            pairs.append((code, name))
+        sym = to_symbol(tk)
+        if sym and sym not in seen:
+            seen.add(sym)
+            pairs.append((sym, name))
+        elif sym is None:
+            print(f"  {tk} {name}: 한국 종목 → 이 모델(미국 학습) 대상 아님, 건너뜀")
     return pairs
 
 
@@ -86,7 +87,8 @@ def load_model(device):
 @torch.no_grad()
 def predict_one(model, device, code: str) -> tuple[float, bytes, str] | None:
     """(상승확률, png_bytes, 기준일) 반환. 데이터 부족/거래정지면 None."""
-    df = fdr.DataReader(code, (datetime.now().year - 1))  # 최근 1년+ 넉넉히
+    start = (datetime.now() - timedelta(days=200)).strftime("%Y-%m-%d")  # 60거래일 확보용 여유
+    df = fdr.DataReader(code, start)
     df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
     if len(df) < WINDOW:
         return None
