@@ -1,4 +1,4 @@
-"""로컬 추론: 관심/보유 종목의 최근 60일 차트 → 5일 뒤 상승 확률.
+"""로컬 추론: 관심/보유 종목의 최근 6개월 차트 → 약 1개월 뒤 상승 확률.
 
 결과를 ml/signals/latest.json 에 저장한다 (차트 썸네일은 base64로 임베드).
 이 JSON은 git에 커밋되어 Oracle 서버로 pull되고, Streamlit 'AI 신호' 탭이
@@ -87,7 +87,7 @@ def load_model(device):
 @torch.no_grad()
 def predict_one(model, device, code: str) -> tuple[float, bytes, str] | None:
     """(상승확률, png_bytes, 기준일) 반환. 데이터 부족/거래정지면 None."""
-    start = (datetime.now() - timedelta(days=200)).strftime("%Y-%m-%d")  # 60거래일 확보용 여유
+    start = (datetime.now() - timedelta(days=400)).strftime("%Y-%m-%d")  # WINDOW(120거래일) 확보용 여유
     df = fdr.DataReader(code, start)
     df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
     if len(df) < WINDOW:

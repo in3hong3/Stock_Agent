@@ -21,15 +21,21 @@ def _load_signals() -> dict | None:
         return None
 
 
+def _approx_months(trading_days: int) -> str:
+    """거래일 수 → 사람이 읽는 근사 기간 (예: 120 → '약 6개월')."""
+    months = round(trading_days / 21)  # 월 ≈ 21거래일
+    return f"약 {months}개월" if months >= 1 else f"{trading_days}거래일"
+
+
 def render_tab_ml_signals() -> None:
     st.subheader("🧠 AI 패턴 신호 (실험적)")
-    st.caption(
-        "과거 60거래일 캔들차트 이미지를 CNN(ResNet18)이 보고 매긴 **5거래일 뒤 상승 확률**입니다. "
-        "규칙 기반 신호가 아니라 미래 수익률로 학습한 별도 모델이며, 보조 참고용입니다."
-    )
 
     data = _load_signals()
     if not data:
+        st.caption(
+            "과거 차트 이미지를 CNN(ResNet18)이 보고 매긴 **중기 상승 확률**입니다. "
+            "규칙 기반 신호가 아니라 미래 수익률로 학습한 별도 모델이며, 보조 참고용입니다."
+        )
         st.info(
             "아직 생성된 신호가 없습니다.\n\n"
             "로컬(GPU 노트북)에서 아래를 실행하면 이 탭에 채워집니다:\n"
@@ -37,6 +43,14 @@ def render_tab_ml_signals() -> None:
             "2. `python ml/predict.py` — 관심종목 추론 → `ml/signals/latest.json` 커밋·배포"
         )
         return
+
+    win_txt = _approx_months(data.get("window_days", 120))
+    hor_txt = _approx_months(data.get("horizon_days", 20))
+    st.caption(
+        f"과거 {win_txt} 캔들차트 이미지를 CNN(ResNet18)이 보고 매긴 "
+        f"**{hor_txt} 뒤 상승 확률**입니다. 하루하루가 아니라 몇 주~몇 달의 큰 흐름을 봅니다. "
+        "규칙 기반 신호가 아니라 미래 수익률로 학습한 별도 모델이며, 보조 참고용입니다."
+    )
 
     signals = data.get("signals", [])
     auc = data.get("val_auc")
@@ -67,14 +81,14 @@ def render_tab_ml_signals() -> None:
             st.markdown(f"**{s.get('name', s['ticker'])}** `{s['ticker']}`")
             st.progress(min(max(prob, 0.0), 1.0),
                         text=f"상승 확률 {prob:.1%}")
-            st.caption(f"기준일 {s.get('as_of', '-')} · {data.get('horizon_days', 5)}일 뒤 전망")
+            st.caption(f"기준일 {s.get('as_of', '-')} · {hor_txt} 뒤 전망")
         st.divider()
 
     with st.expander("이 신호는 어떻게 만들어지나요?"):
         st.markdown(
-            "- **입력**: 종목의 최근 60거래일 캔들+거래량 차트 이미지 (미래 데이터 없음)\n"
-            "- **출력**: 5거래일 뒤 종가가 오늘보다 높을 확률\n"
-            "- **학습**: 코스피 시총 상위 종목의 과거 차트로, 규칙이 아닌 실제 미래 수익률을 맞히도록 훈련\n"
+            f"- **입력**: 종목의 최근 {win_txt}({data.get('window_days', 120)}거래일) 캔들+거래량 차트 이미지 (미래 데이터 없음)\n"
+            f"- **출력**: {hor_txt}({data.get('horizon_days', 20)}거래일) 뒤 의미 있는 상승(+5% 이상) 확률\n"
+            "- **학습**: S&P500 종목의 과거 차트로, 규칙이 아닌 실제 미래 수익률을 맞히도록 훈련\n"
             "- **주의**: 시장 예측은 본질적으로 어렵습니다. AUC가 0.5에 가까우면 동전던지기와 같으니 "
             "확률값을 맹신하지 말고 다른 근거와 함께 보세요."
         )
