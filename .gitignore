@@ -16,6 +16,8 @@ ENV/
 # Data and Logs
 data/
 logs/
+ml/dataset/
+ml/models/
 *.sqlite3
 .pytest_cache/
 
