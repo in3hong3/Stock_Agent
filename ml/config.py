@@ -36,7 +36,9 @@ IMG_SIZE = 224                             # 픽셀 (정사각형)
 
 # ── 학습 ──────────────────────────────────────────────────
 BATCH_SIZE = 64
-LR = 1e-4
+LR = 5e-5                                   # 낮춰서 급한 과적합 방지 (기존 1e-4는 epoch2부터 외움)
+WEIGHT_DECAY = 1e-4                         # 가중치 규제 → 과적합 억제
+DROPOUT = 0.4                               # 분류층 dropout → 암기 방지
 MAX_EPOCHS = 30
 EARLY_STOP_PATIENCE = 5
 NUM_WORKERS = 2

@@ -18,6 +18,9 @@ data/
 logs/
 ml/dataset/
 ml/models/
+# ml 신호 결과물은 시크릿이 아니라 서버가 읽어야 하는 산출물 → *.json 무시에서 예외
+!ml/signals/
+!ml/signals/*.json
 *.sqlite3
 .pytest_cache/
 

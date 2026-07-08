@@ -24,8 +24,9 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, models, transforms
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import (BATCH_SIZE, DATASET_DIR, EARLY_STOP_PATIENCE, IMG_SIZE,
-                    LR, MAX_EPOCHS, MODELS_DIR, NUM_WORKERS)
+from config import (BATCH_SIZE, DATASET_DIR, DROPOUT, EARLY_STOP_PATIENCE,
+                    IMG_SIZE, LR, MAX_EPOCHS, MODELS_DIR, NUM_WORKERS,
+                    WEIGHT_DECAY)
 
 
 def roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -79,13 +80,13 @@ def main() -> None:
                             num_workers=NUM_WORKERS, pin_memory=True)
 
     model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-    model.fc = nn.Linear(model.fc.in_features, 2)
+    model.fc = nn.Sequential(nn.Dropout(DROPOUT), nn.Linear(model.fc.in_features, 2))
     model.to(device)
 
     # 클래스 불균형 보정
     weights = torch.tensor(counts.sum() / (2.0 * counts), dtype=torch.float32, device=device)
     criterion = nn.CrossEntropyLoss(weight=weights)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)

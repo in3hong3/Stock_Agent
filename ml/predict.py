@@ -30,7 +30,7 @@ from torchvision import models, transforms
 sys.path.insert(0, str(Path(__file__).resolve().parent))    # ml/ 우선 (chart, config)
 sys.path.append(str(Path(__file__).resolve().parent.parent))  # 루트는 뒤 (modules — 루트 config 패키지와 충돌 방지)
 from chart import to_png_bytes
-from config import HORIZON, IMG_SIZE, MODELS_DIR, WINDOW
+from config import DROPOUT, HORIZON, IMG_SIZE, MODELS_DIR, WINDOW
 
 SIGNALS_DIR = Path(__file__).resolve().parent / "signals"
 LATEST_JSON = SIGNALS_DIR / "latest.json"
@@ -78,7 +78,8 @@ def load_model(device):
         sys.exit(f"학습된 모델이 없습니다: {ckpt_path}\n먼저 python ml/train.py 를 실행하세요.")
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)  # 자체 생성 파일
     model = models.resnet18(weights=None)
-    model.fc = torch.nn.Linear(model.fc.in_features, 2)
+    model.fc = torch.nn.Sequential(torch.nn.Dropout(DROPOUT),
+                                   torch.nn.Linear(model.fc.in_features, 2))  # train.py와 동일 구조
     model.load_state_dict(ckpt["state_dict"])
     model.eval().to(device)
     return model, ckpt
