@@ -35,6 +35,8 @@ PATTERNS = {
     "drop10": patterns.sharp_drop,
     "drop10_above200": patterns.sharp_drop_above_ma200,   # 추세 위 급락 = 흔들기?
     "drop10_below200": patterns.sharp_drop_below_ma200,   # 추세 아래 급락 = 붕괴?
+    "high52w": patterns.high_52w_breakout,                # 신고가 = 사는 자리 vs 꼭지?
+    "head_shoulders": patterns.head_shoulders,            # 약세 반전 — 우위는 음(-)이어야 작동
 }
 
 

@@ -88,6 +88,73 @@ def sharp_drop_below_ma200(df: pd.DataFrame, **kw) -> list:
     return _ma200_filter(df, sharp_drop(df, **kw), above=False)
 
 
+def high_52w_breakout(df: pd.DataFrame, lookback: int = 252, min_gap: int = 20) -> list:
+    """52주 신고가 돌파: 종가가 직전 252거래일 최고 종가를 넘어선 날 (에피소드 첫날만).
+
+    '신고가는 사는 자리다 vs 꼭지다' 논쟁의 이벤트 정의. 강한 추세에서 연일
+    신고가가 나오므로 min_gap을 크게(20일) 잡아 같은 랠리 중복 계상을 줄인다.
+    """
+    close = df["Close"]
+    prior_max = close.shift(1).rolling(lookback).max()   # 어제까지의 52주 최고
+    cond = close > prior_max
+    first = cond & ~cond.shift(1, fill_value=False)      # 돌파 진입일만
+    dates = list(df.index[first.fillna(False)])
+    return _dedupe(dates, df.index, min_gap)
+
+
+def _pivot_highs(high: pd.Series, window: int) -> list:
+    """좌우 window봉보다 높은 국소 고점의 위치(iloc) 리스트."""
+    v = high.to_numpy()
+    n = len(v)
+    out = []
+    for i in range(window, n - window):
+        seg = v[i - window: i + window + 1]
+        if v[i] == seg.max() and (seg == v[i]).sum() == 1:
+            out.append(i)
+    return out
+
+
+def head_shoulders(df: pd.DataFrame, pivot_window: int = 5, shoulder_tol: float = 0.05,
+                   head_min: float = 0.03, max_span: int = 120,
+                   confirm_within: int = 40, min_gap: int = 10) -> list:
+    """헤드앤숄더(약세 반전) — 확정일 = 넥라인 하향 이탈 마감일.
+
+    정의:
+    - 연속 피벗 고점 3개 (왼어깨 P1, 머리 P2, 오른어깨 P3): P2가 양쪽보다 head_min 이상 높고,
+      어깨 둘은 높이 차이 ≤ shoulder_tol
+    - 넥라인 = 두 골(P1~P2 최저가, P2~P3 최저가) 중 낮은 쪽 (보수적)
+    - P3 피벗이 확정된(pivot_window 경과) 후 confirm_within일 내 종가가 넥라인 아래로
+      마감하면 확정. 그 전에 머리 위로 신고가 나면 패턴 무효.
+    """
+    high, low, close = df["High"], df["Low"], df["Close"]
+    piv = _pivot_highs(high, pivot_window)
+    highs, lows, closes = high.to_numpy(), low.to_numpy(), close.to_numpy()
+    n = len(df)
+
+    dates = []
+    for k in range(len(piv) - 2):
+        p1, p2, p3 = piv[k], piv[k + 1], piv[k + 2]     # 인접한 피벗 고점 3개
+        if p3 - p1 > max_span:
+            continue
+        s1, h, s2 = highs[p1], highs[p2], highs[p3]
+        if h < max(s1, s2) * (1 + head_min):             # 머리가 충분히 높아야
+            continue
+        if abs(s2 / s1 - 1) > shoulder_tol:              # 어깨 대칭
+            continue
+        neckline = min(lows[p1:p2 + 1].min(), lows[p2:p3 + 1].min())
+        start = p3 + pivot_window                        # 오른어깨 피벗 확정 이후만
+        end = min(start + confirm_within, n)
+        for j in range(start, end):
+            if highs[j] > h:                             # 머리 돌파 → 패턴 무효
+                break
+            if closes[j] < neckline:                     # 넥라인 이탈 마감 → 확정
+                dates.append(df.index[j])
+                break
+
+    dates = sorted(set(dates))
+    return _dedupe(dates, df.index, min_gap)
+
+
 def _pivot_lows(low: pd.Series, window: int) -> list:
     """좌우 window봉보다 낮은 국소 저점의 위치(iloc) 리스트.
     피벗은 우측 window봉이 지나야 확정된다는 점을 호출부에서 지켜야 함."""
