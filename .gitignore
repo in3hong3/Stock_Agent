@@ -17,6 +17,7 @@ ENV/
 data/
 logs/
 ml/dataset/
+ml/dataset_patterns/
 ml/models/
 ml/cache/
 ml/study/

@@ -7,9 +7,11 @@
 - val AUC 기준 Early Stopping + 최고 성능 가중치 저장.
 
 사용:
-    python ml/train.py
+    python ml/train.py                                        # 수익률 라벨 데이터셋
+    python ml/train.py --data-dir ml/dataset_patterns/double_bottom --out pattern_double_bottom.pth
 """
 
+import argparse
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8")  # Windows cp949 콘솔 대응
@@ -58,6 +60,12 @@ def evaluate(model, loader, criterion, device):
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data-dir", type=Path, default=DATASET_DIR,
+                    help="train/val 하위폴더를 가진 데이터셋 루트")
+    ap.add_argument("--out", default="best_resnet18.pth", help="MODELS_DIR에 저장할 파일명")
+    args = ap.parse_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}"
           + (f" ({torch.cuda.get_device_name(0)})" if device.type == "cuda" else " ⚠ GPU 미인식"))
@@ -67,9 +75,11 @@ def main() -> None:
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-    train_ds = datasets.ImageFolder(DATASET_DIR / "train", transform=tf)
-    val_ds = datasets.ImageFolder(DATASET_DIR / "val", transform=tf)
-    assert train_ds.class_to_idx == {"down": 0, "up": 1}, train_ds.class_to_idx
+    train_ds = datasets.ImageFolder(args.data_dir / "train", transform=tf)
+    val_ds = datasets.ImageFolder(args.data_dir / "val", transform=tf)
+    # 이진 분류 전제 — 알파벳순으로 1번 클래스(down<up, none<pattern)가 '긍정' 클래스
+    assert len(train_ds.classes) == 2, train_ds.class_to_idx
+    print(f"classes: {train_ds.class_to_idx} (softmax [:,1] = '{train_ds.classes[1]}' 확률)")
 
     counts = np.bincount(train_ds.targets, minlength=2)
     print(f"train {len(train_ds)}개 (down {counts[0]} / up {counts[1]}) · val {len(val_ds)}개")
@@ -90,7 +100,7 @@ def main() -> None:
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    best_path = MODELS_DIR / "best_resnet18.pth"
+    best_path = MODELS_DIR / args.out
     best_auc, patience = -1.0, 0
 
     for epoch in range(1, MAX_EPOCHS + 1):
