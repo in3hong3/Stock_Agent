@@ -49,6 +49,45 @@ def ma50_touch_bounce(df: pd.DataFrame, period: int = 50, tol: float = 0.005,
     return _dedupe(dates, df.index, min_gap)
 
 
+def sharp_drop(df: pd.DataFrame, drop: float = -0.10, lookback: int = 10,
+               min_gap: int = 10) -> list:
+    """급락: 최근 lookback거래일 수익률 ≤ drop(−10%). 확정일 = 조건 최초 충족일.
+
+    '보유 종목이 확 빠졌다 — 버텨도 되나?' 질문의 이벤트 정의.
+    에피소드 첫날만 잡는다 (전날은 조건 미충족이었던 날).
+    """
+    close = df["Close"]
+    ret = close / close.shift(lookback) - 1
+    cond = ret <= drop
+    first = cond & ~cond.shift(1, fill_value=False)   # 에피소드 진입일만
+    dates = list(df.index[first.fillna(False)])
+    return _dedupe(dates, df.index, min_gap)
+
+
+def _ma200_filter(df: pd.DataFrame, dates: list, above: bool) -> list:
+    """이벤트일 종가가 200일선 위/아래인 것만. MA 미형성 구간(NaN)은 제외."""
+    close = df["Close"]
+    ma200 = close.rolling(200).mean()
+    out = []
+    for d in dates:
+        m = ma200.loc[d]
+        if pd.isna(m):
+            continue
+        if (close.loc[d] > m) == above:
+            out.append(d)
+    return out
+
+
+def sharp_drop_above_ma200(df: pd.DataFrame, **kw) -> list:
+    """급락인데 아직 200일선 위 — '상승 추세 중의 흔들기' 후보."""
+    return _ma200_filter(df, sharp_drop(df, **kw), above=True)
+
+
+def sharp_drop_below_ma200(df: pd.DataFrame, **kw) -> list:
+    """급락 + 200일선 아래 — '추세 붕괴' 후보."""
+    return _ma200_filter(df, sharp_drop(df, **kw), above=False)
+
+
 def _pivot_lows(low: pd.Series, window: int) -> list:
     """좌우 window봉보다 낮은 국소 저점의 위치(iloc) 리스트.
     피벗은 우측 window봉이 지나야 확정된다는 점을 호출부에서 지켜야 함."""

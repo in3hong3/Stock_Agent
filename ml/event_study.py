@@ -32,6 +32,9 @@ from config import (CACHE_DIR, EVENT_HORIZONS, IS_OOS_SPLIT, MAX_TICKERS,
 PATTERNS = {
     "ma50": patterns.ma50_touch_bounce,
     "double_bottom": patterns.double_bottom,
+    "drop10": patterns.sharp_drop,
+    "drop10_above200": patterns.sharp_drop_above_ma200,   # 추세 위 급락 = 흔들기?
+    "drop10_below200": patterns.sharp_drop_below_ma200,   # 추세 아래 급락 = 붕괴?
 }
 
 
