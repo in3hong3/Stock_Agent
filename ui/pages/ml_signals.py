@@ -179,13 +179,64 @@ def _render_pattern_model(held_map: dict) -> None:
             )
 
 
+# ══════════════════ ③ 데일리 판정 (서버 cron이 매일 생성) ══════════════════
+
+_SCAN_JSON = Path(__file__).resolve().parents[2] / "data" / "market_scan.json"
+
+
+def _render_daily_verdict() -> None:
+    try:
+        with open(_SCAN_JSON, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        st.info("아직 판정이 없습니다 — 매일 미국장 마감 후(KST 오전) 자동 생성됩니다.")
+        return
+
+    st.caption(
+        f"규칙 기반 패턴 탐지 + 이벤트 스터디 통계(S&P500 496종목, 2020~2026)로 만든 "
+        f"자동 판정입니다. 투자 자문이 아니라 데이터 참고 자료입니다. · 생성 {data.get('generated_at', '-')}"
+    )
+
+    # 판정문
+    for line in data.get("verdict", []):
+        if line.startswith("🔴"):
+            st.error(line)
+        elif line.startswith("🟡"):
+            st.warning(line)
+        elif line.startswith("🟢"):
+            st.success(line)
+        else:
+            st.info(line)
+
+    st.divider()
+
+    def _table(rows: list, title: str):
+        if not rows:
+            return
+        st.markdown(f"**{title}**")
+        disp = [{
+            "종목": r["ticker"], "이름": r.get("name", ""), "현재가": f"{r['price']:,}",
+            "10일%": r["ret10"], "21일%": r["ret21"], "고점比%": r["off_high"],
+            "200일선": "위" if r["above_ma200"] else "⚠ 아래",
+            "50일선": "위" if r["above_ma50"] else "아래",
+            "패턴": " ".join(r.get("flags", [])) or "-",
+        } for r in rows]
+        st.dataframe(disp, use_container_width=True, hide_index=True)
+
+    _table(data.get("market", []), "📊 지수")
+    _table(data.get("holdings", []), "📦 보유 종목")
+
+
 # ══════════════════ 탭 진입점 ══════════════════
 
 def render_tab_ml_signals() -> None:
     st.subheader("🧠 AI 신호 (실험적)")
     held_map = _load_holdings()
 
-    sub_return, sub_pattern = st.tabs(["📈 상승확률 (수익률 모델)", "🔍 패턴 감지 (이중바닥)"])
+    sub_daily, sub_return, sub_pattern = st.tabs(
+        ["📋 데일리 판정", "📈 상승확률 (수익률 모델)", "🔍 패턴 감지 (이중바닥)"])
+    with sub_daily:
+        _render_daily_verdict()
     with sub_return:
         _render_return_model(held_map)
     with sub_pattern:
