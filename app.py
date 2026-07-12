@@ -25,6 +25,7 @@ from agents.router import AgenticRouter
 from ui.pages.sidebar import render_side_panel
 from ui.pages.tracker import render_tab_tracker
 from ui.pages.paper import render_tab_paper
+from ui.pages.weekly_report import render_tab_weekly_report
 from ui.pages.journal import render_tab_journal
 from ui.pages.admin import render_tab_admin
 from ui.pages.analysts import (
@@ -165,6 +166,7 @@ def main():
         tab_labels = [
             "📌 내 종목",
             "🗞️ 데일리",
+            "📅 주간 리포트",
             "🔥 핫 섹터",
             "🤖 분석관",
             "💼 포트폴리오",
@@ -177,13 +179,15 @@ def main():
             tab_labels.append("🔧 관리자")
 
         all_tabs = st.tabs(tab_labels)
-        (tab_tracker, tab_paper, tab_hot, tab_analysts, tab_portfolio,
-         tab_journal, tab_alerts, tab_backtest, tab_ml) = all_tabs[:9]
+        (tab_tracker, tab_paper, tab_weekly, tab_hot, tab_analysts, tab_portfolio,
+         tab_journal, tab_alerts, tab_backtest, tab_ml) = all_tabs[:10]
 
         with tab_tracker:
             render_tab_tracker()
         with tab_paper:
             render_tab_paper()
+        with tab_weekly:
+            render_tab_weekly_report()
         with tab_hot:
             render_tab_hot_sectors()
         with tab_analysts:
@@ -215,7 +219,7 @@ def main():
         with tab_ml:
             render_tab_ml_signals()
         if is_admin:
-            with all_tabs[9]:
+            with all_tabs[10]:
                 render_tab_admin()
 
 

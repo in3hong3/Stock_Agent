@@ -28,5 +28,10 @@
 #       서버·cron·yfinance·검색LLM·카카오·캐시디스크 점검, 이상 시에만 카카오 1회 알림.
 30 23 * * * cd /home/ubuntu/stock-agent && .venv/bin/python scripts/health_check.py >> logs/health.log 2>&1
 
+# 6) 주간 유튜버 리포트 — 매주 일요일 KST 18:00 (UTC 일 09:00)
+#       한 주(월~일) 영상 종합 → data/weekly_reports/YYYY-Www.json. LLM 1회(집계 4섹션은 무료).
+#       아침 잡들과 시간대 분리 + 토요일까지 영상 다 반영된 뒤 발행.
+0 9 * * 0 cd /home/ubuntu/stock-agent && .venv/bin/python scripts/publish_weekly_report.py >> logs/weekly_report.log 2>&1
+
 # 로그 정리 (매주 일요일, 30일 이상된 로그 삭제)
 0 0 * * 0 find /home/ubuntu/stock-agent/logs -name "*.log" -mtime +30 -delete
