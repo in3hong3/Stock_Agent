@@ -114,14 +114,94 @@ def _render_report(report: dict, holdings_tickers: set):
             st.caption("이번 주 영상에서 보유종목 언급이 없습니다.")
 
 
+def _render_trackrecord(tr: dict):
+    """유튜버 콜 적중률 트랙레코드 (전체 기간)."""
+    ch = tr.get("channel", "유튜버")
+    win = tr.get("window", {})
+    with st.expander(f"🎯 **{ch}** 콜 적중률 — 이 채널 콜은 실제로 맞았나? "
+                     f"({tr.get('total_calls', 0)}개 콜 채점)", expanded=False):
+        st.caption(
+            f"검증 기간 {win.get('start','')} ~ {win.get('end','')} · "
+            f"산출 {tr.get('computed_at','')} · 매주 갱신 · "
+            "매수=이후 상승 시 적중 / 주의=이후 하락(회피) 시 적중 · 알파=SPY 대비 초과수익"
+        )
+
+        buy = tr.get("buy_stats", [])
+        if buy:
+            st.markdown("**📈 매수 콜 성적**")
+            cols = st.columns(len(buy))
+            for col, b in zip(cols, buy):
+                col.metric(
+                    f"+{b['horizon']}일 (N={b['n']})",
+                    f"적중 {b['hit_rate']:.0f}%",
+                    delta=f"알파 {b['avg_alpha']:+.1f}%",
+                )
+            st.caption(
+                "→ 매수 콜은 보유 기간이 길수록 시장을 크게 앞섭니다. "
+                "특히 30~90일 알파가 뚜렷 — 참고 신호로 쓸 가치가 있습니다."
+            )
+
+        caution = tr.get("caution_stats", [])
+        if caution:
+            st.markdown("**⚠️ 주의 콜 성적**")
+            cols = st.columns(len(caution))
+            for col, c in zip(cols, caution):
+                col.metric(
+                    f"+{c['horizon']}일 (N={c['n']})",
+                    f"회피성공 {c['hit_rate']:.0f}%",
+                    delta=f"평균 {c['avg_ret']:+.1f}%",
+                    delta_color="inverse",
+                )
+            st.warning(
+                "🚩 **주의 콜은 예측력이 약합니다** — 이 채널이 '주의'한 종목이 오히려 오르는 "
+                "경향(역지표). **'주의'를 매도 신호로 쓰지 마세요.** "
+                "(표본 기간이 강세장 한 국면이라 알파 기준으로 해석해야 함)"
+            )
+
+        rows = tr.get("ticker_rows", [])
+        if rows:
+            st.markdown("**종목별 매수 콜 성적 (5회+ 언급, +30일 알파순)**")
+            import pandas as pd
+            df = pd.DataFrame([
+                {"종목": f"{r['name']} ({r['ticker']})", "매수콜": r["buy_n"],
+                 "적중률": f"{r['hit_rate']:.0f}%", "평균알파": f"{r['avg_alpha']:+.1f}%"}
+                for r in rows[:15]
+            ])
+            st.dataframe(df, hide_index=True, use_container_width=True)
+
+        best, worst = tr.get("best_calls", []), tr.get("worst_calls", [])
+        if best or worst:
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                st.markdown("**🏅 잘 맞은 매수 콜 (+30일 알파)**")
+                for b in best[:6]:
+                    st.markdown(f"- **{b['ticker']}** `{b['date']}` · "
+                                f"수익 {b['ret']:+.0f}% · 알파 {b['alpha']:+.0f}%")
+            with cc2:
+                st.markdown("**💤 빗나간 매수 콜**")
+                for w in worst[:6]:
+                    st.markdown(f"- **{w['ticker']}** `{w['date']}` · "
+                                f"수익 {w['ret']:+.0f}% · 알파 {w['alpha']:+.0f}%")
+
+        st.caption(
+            "⚠️ 한계: 검증 기간이 약 6개월(강세장 한 국면)뿐이라 시장 대비 알파가 신뢰 지표이고, "
+            "절대수익은 부풀려져 있습니다. 유튜버 콜은 참고이지 보장이 아닙니다."
+        )
+
+
 def render_tab_weekly_report():
     from modules.weekly_youtube_report import (
         get_report, list_reports, publish_weekly_report, week_key,
     )
+    from modules.youtuber_trackrecord import get_trackrecord
     from modules.issue_tracker import get_portfolio_holdings
 
     st.header("📅 주간 유튜버 리포트")
     st.caption("한 주(월~일) 동안 유튜버들이 다룬 종목·톤·테마를 종합합니다. 매주 일요일 저녁 자동 발행.")
+
+    tr = get_trackrecord()
+    if tr:
+        _render_trackrecord(tr)
 
     try:
         holdings_tickers = {h["ticker"] for h in get_portfolio_holdings() if h.get("ticker")}
