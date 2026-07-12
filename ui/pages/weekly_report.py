@@ -189,24 +189,84 @@ def _render_trackrecord(tr: dict):
         )
 
 
+def _render_insights(ins: dict, holdings_tickers: set):
+    """섹터/테마 관심도 + 시황·경계 관점 타임라인."""
+    sf = ins.get("sector_focus", {})
+    sectors = sf.get("sectors", [])
+    days = sf.get("window_days", 30)
+
+    if sectors:
+        with st.expander(f"🧭 **어느 섹터를 보고 있나** — 최근 {days}일 유튜버 매수 쏠림 "
+                         f"(콜 {ins.get('recent_call_count', 0)}개)", expanded=False):
+            st.caption(f"산출 {ins.get('computed_at','')} · 점수 = (매수-주의)/전체 · "
+                       "Δ = 이전 동기간 대비 언급 증감 · 매주 갱신")
+            for s in sectors[:12]:
+                delta = s.get("delta", 0)
+                dtxt = (f" <span style='color:#00FFA3;'>▲{delta}</span>" if delta > 0
+                        else f" <span style='color:#94A3B8;'>▼{abs(delta)}</span>" if delta < 0
+                        else "")
+                sc = s["score"]
+                color = "#FF4B4B" if sc > 20 else "#4B7BFF" if sc < -20 else "#94A3B8"
+                held = "⭐" if holdings_tickers & set(s.get("top_tickers", [])) else ""
+                st.markdown(
+                    f"<div style='padding:6px 0; border-bottom:1px dotted #334155;'>"
+                    f"<b>{held} {s['sector']}</b>{dtxt} "
+                    f"<span style='float:right; color:{color};'><b>{sc:+d}</b></span><br>"
+                    f"<span style='font-size:0.8rem; color:#94A3B8;'>"
+                    f"언급 {s['total']}회 (매수 {s['buy']}·중립 {s['neutral']}·주의 {s['caution']}) · "
+                    f"{', '.join(s.get('top_tickers', [])[:5])}</span></div>",
+                    unsafe_allow_html=True,
+                )
+            st.caption("⚠️ 유니버스가 기술주 편중이라 상위 섹터가 반도체·소프트웨어에 쏠립니다. "
+                       "Δ(증감)와 점수 방향을 함께 보세요.")
+
+    mv = ins.get("market_view", [])
+    if mv:
+        with st.expander("🌡️ **유튜버 시황·경계 관점** — 지금 뭘 조심하고 뭘 노리나 "
+                         "(최근 영상 타임라인)", expanded=False):
+            st.caption("영상 제목·핵심논지에서 추출한 시황 스탠스. "
+                       "🔴경계 / 🟢기회 / ⚪중립 · 제목 클릭 대신 최신순 나열")
+            badge = {"경계": "🔴 경계", "기회": "🟢 기회", "중립": "⚪ 중립"}
+            for v in mv:
+                th = f" <span style='color:#64748B;'>— {v['thesis']}</span>" if v.get("thesis") else ""
+                st.markdown(
+                    f"<div style='padding:4px 0; font-size:0.85rem;'>"
+                    f"<span style='color:#64748B;'>{v['date']}</span> "
+                    f"{badge.get(v['stance'],'⚪')} <b>{v['title']}</b>{th}</div>",
+                    unsafe_allow_html=True,
+                )
+            n_caution = sum(1 for v in mv if v["stance"] == "경계")
+            n_opp = sum(1 for v in mv if v["stance"] == "기회")
+            tone = ("경계 우위" if n_caution > n_opp else "기회 우위"
+                    if n_opp > n_caution else "중립")
+            st.info(f"최근 {len(mv)}개 영상 스탠스: 🟢기회 {n_opp} · 🔴경계 {n_caution} → **{tone}**")
+
+
 def render_tab_weekly_report():
     from modules.weekly_youtube_report import (
         get_report, list_reports, publish_weekly_report, week_key,
     )
     from modules.youtuber_trackrecord import get_trackrecord
+    from modules.youtuber_insights import get_insights
     from modules.issue_tracker import get_portfolio_holdings
 
     st.header("📅 주간 유튜버 리포트")
     st.caption("한 주(월~일) 동안 유튜버들이 다룬 종목·톤·테마를 종합합니다. 매주 일요일 저녁 자동 발행.")
 
+    try:
+        _ht = {h["ticker"] for h in get_portfolio_holdings() if h.get("ticker")}
+    except Exception:
+        _ht = set()
+
+    ins = get_insights()
+    if ins:
+        _render_insights(ins, _ht)
+
     tr = get_trackrecord()
     if tr:
         _render_trackrecord(tr)
 
-    try:
-        holdings_tickers = {h["ticker"] for h in get_portfolio_holdings() if h.get("ticker")}
-    except Exception:
-        holdings_tickers = set()
+    holdings_tickers = _ht
 
     keys = list_reports()
     this_key = week_key()

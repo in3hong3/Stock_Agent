@@ -33,8 +33,9 @@
 #       아침 잡들과 시간대 분리 + 토요일까지 영상 다 반영된 뒤 발행.
 0 9 * * 0 cd /home/ubuntu/stock-agent && .venv/bin/python scripts/publish_weekly_report.py >> logs/weekly_report.log 2>&1
 
-# 7) 유튜버 콜 트랙레코드 — 매주 일요일 KST 18:30 (UTC 일 09:30)
-#       전체 매수/주의 콜을 미래 수익률로 채점 → data/youtuber_trackrecord.json.
+# 7) 유튜버 콜 트랙레코드 + 인사이트 — 매주 일요일 KST 18:30 (UTC 일 09:30)
+#       ① 매수/주의 콜을 미래 수익률로 채점 → data/youtuber_trackrecord.json
+#       ② 섹터 관심도 + 시황·경계 관점 → data/youtuber_insights.json
 #       가격 다운로드가 무거워 주 1회. 주간 리포트 직후에 배치.
 30 9 * * 0 cd /home/ubuntu/stock-agent && .venv/bin/python scripts/publish_trackrecord.py >> logs/trackrecord.log 2>&1
 
