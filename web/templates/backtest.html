@@ -1,0 +1,50 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>🧪 전략 백테스트</h3>
+<div class="muted-sm">과거 데이터로 매매 전략을 시뮬레이션합니다. (일봉 종가 체결, 수수료 0.1% 가정)</div>
+
+<details class="news-card" style="margin-top:10px;">
+  <summary>ℹ️ 백테스트가 뭔가요? (처음이면 펼쳐보세요)</summary>
+  <div class="muted-sm" style="margin-top:6px;">
+    <b>한 줄 요약</b>: "타임머신 타고 과거로 가서, 이 매매 규칙대로만 사고팔았으면 지금 얼마였을까?"를 가상으로 돌려보는 도구예요.<br>
+    가장 중요한 건 <b>Buy & Hold(그냥 사서 묻어두기)와의 비교</b> — 전략 수익률이 그보다 높아야 사고판 보람이 있습니다.
+    (대부분 단순 전략은 그냥 묻어두는 걸 못 이깁니다.)
+  </div>
+</details>
+
+{# 🎯 실제 시그널 백테스트 #}
+<hr class="sep">
+<h4>🎯 실제 시그널 백테스트</h4>
+<div class="muted-sm">내 종목 탭의 진짜 매수 기법(눌림목·돌파·과매도)을 과거 2년 매 거래일에 적용 → 이후 N일 실제 주가로 채점한 트랙레코드입니다.</div>
+<form class="inline-form" hx-post="/t/backtest/signal" hx-target="#sig-out" hx-swap="innerHTML"
+      hx-disabled-elt="button" hx-indicator="#sig-ind">
+  <select name="horizon">
+    <option value="5">5일 후</option>
+    <option value="10" selected>10일 후</option>
+    <option value="20">20일 후</option>
+  </select>
+  <button class="btn-primary" type="submit">🎯 시그널 백테스트 실행</button>
+</form>
+<div id="sig-ind" class="htmx-indicator muted-sm" style="padding:8px;">📊 20+종목 × 2년 백테스트 중… (수십 초 소요)</div>
+<div id="sig-out"></div>
+
+{# 📐 단순 전략 백테스트 #}
+<hr class="sep">
+<h4>📐 단순 전략 백테스트</h4>
+<form class="bt-form" hx-post="/t/backtest/simple" hx-target="#simple-out" hx-swap="innerHTML"
+      hx-disabled-elt="button" hx-indicator="#simple-ind">
+  <div class="bt-grid">
+    <label>티커<input type="text" name="ticker" value="NVDA"></label>
+    <label>전략<select name="strategy">{% for s in strategies %}<option value="{{ s.key }}">{{ s.label }}</option>{% endfor %}</select></label>
+    <label>기간<select name="period"><option>1y</option><option selected>2y</option><option>5y</option><option>10y</option></select></label>
+    <label>초기 자본 ($)<input type="number" name="capital" value="10000" min="100" step="1000"></label>
+  </div>
+  <div class="bt-grid">
+    <label>매수 RSI 이하 <span class="muted-sm">(RSI 전략 전용)</span><input type="number" name="rsi_buy" value="30" min="10" max="50"></label>
+    <label>매도 RSI 이상 <span class="muted-sm">(RSI 전략 전용)</span><input type="number" name="rsi_sell" value="70" min="50" max="90"></label>
+  </div>
+  <button class="btn-primary" type="submit" style="margin-top:8px;">🚀 백테스트 실행</button>
+</form>
+<div id="simple-ind" class="htmx-indicator muted-sm" style="padding:8px;">📉 백테스트 계산 중…</div>
+<div id="simple-out"></div>
+{% endblock %}

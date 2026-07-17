@@ -1,0 +1,14 @@
+{% if not sig.available %}
+<div class="muted-sm">백테스트 표본이 없습니다 (데이터 부족).</div>
+{% else %}
+<div class="metric-row">
+  <div class="metric"><div class="m-label">매수 신호 표본</div><div class="m-val">{{ '{:,}'.format(sig.n) }}건</div></div>
+  <div class="metric"><div class="m-label">적중률</div><div class="m-val">{{ '%.0f'|format(sig.overall_win) ~ '%' if sig.overall_win is not none else '-' }}</div></div>
+  <div class="metric"><div class="m-label">평균 수익</div><div class="m-val">{{ '%+.1f'|format(sig.avg_ret) }}%</div></div>
+</div>
+<b>셋업별 성과</b>
+{% for v in sig.setup_stats %}
+<div class="muted-sm">• <b>{{ v.setup }}</b> — 적중률 {{ '%.0f'|format(v.win_rate) ~ '%' if v.win_rate is not none else '-' }} · 평균 {{ '%+.1f'|format(v.avg_ret) }}% (표본 {{ v.n }}건)</div>
+{% endfor %}
+<div class="muted-sm" style="margin-top:6px;">※ 과거 펀더멘털(EPS)은 중립 처리·지지저항은 근사라 실제와 약간 차이. 과거 성과가 미래를 보장하지 않습니다.</div>
+{% endif %}

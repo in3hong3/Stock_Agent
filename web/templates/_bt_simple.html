@@ -1,0 +1,32 @@
+{% if not bt.success %}
+<div class="toast" style="color:var(--up); border-color:#FF4B4B55;">❌ {{ bt.error }}</div>
+{% else %}
+<h4>📊 성과 요약</h4>
+<div class="metric-row">
+  <div class="metric"><div class="m-label">전략 수익률</div><div class="m-val">{{ bt.metrics.total_return }}%</div><div class="muted-sm">{{ '%+.2f'|format(bt.metrics.delta_vs_bh) }}%p vs B&H</div></div>
+  <div class="metric"><div class="m-label">Buy & Hold</div><div class="m-val">{{ bt.metrics.bh_return }}%</div></div>
+  <div class="metric"><div class="m-label">CAGR</div><div class="m-val">{{ bt.metrics.cagr }}%</div></div>
+  <div class="metric"><div class="m-label">최대 낙폭 (MDD)</div><div class="m-val">{{ bt.metrics.mdd }}%</div></div>
+</div>
+<div class="metric-row">
+  <div class="metric"><div class="m-label">샤프 비율</div><div class="m-val">{{ bt.metrics.sharpe }}</div></div>
+  <div class="metric"><div class="m-label">승률</div><div class="m-val">{{ bt.metrics.win_rate }}%</div></div>
+  <div class="metric"><div class="m-label">거래 횟수</div><div class="m-val">{{ bt.metrics.n_trades }}회</div></div>
+</div>
+
+<h4>📈 자산 곡선 (전략 vs Buy & Hold)</h4>
+<div class="chart-box">{{ bt.equity_svg|safe }}</div>
+<h4>📉 낙폭 (Drawdown)</h4>
+<div class="chart-box">{{ bt.dd_svg|safe }}</div>
+
+{% if bt.trades %}
+<h4>📋 거래 내역 ({{ bt.trades|length }}건)</h4>
+<div class="table-scroll"><table class="rank-table">
+  <thead><tr>{% for col in bt.trade_cols %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for t in bt.trades %}<tr>{% for col in bt.trade_cols %}<td>{{ t[col] }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table></div>
+{% else %}
+<div class="muted-sm">해당 기간 동안 완결된 거래가 없습니다.</div>
+{% endif %}
+<div class="muted-sm" style="margin-top:6px;">⚠️ 백테스트는 과거 데이터 기반 시뮬레이션이며 미래 수익을 보장하지 않습니다. 슬리피지·세금·배당은 단순화되어 있습니다.</div>
+{% endif %}

@@ -107,12 +107,13 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 - 검증: 빈 상태 + 합성 데이터 채워진 경로 양쪽 렌더 통과 (로컬엔 실 데이터 없음 — 서버/cron 생성분)
 - 미이전: best/worst 콜(잘맞은/빗나간) — 서비스에 데이터는 담되 템플릿 표시 생략(후속). 그 외 동등.
 
-### 5. 🧪 백테스트 (backtest.py) 🔵(계산 온디맨드)
-- [ ] ℹ️ 백테스트 설명 expander (초보용)
-- [ ] 🎯 실제 시그널 백테스트 — 보유기간 선택(5/10/20일) + 실행 버튼, `signal_backtest.run_backtest`, MAJORS 20종목+보유 유니버스, 표본/적중률/평균수익 + 셋업별 성과 🔑
-- [ ] 📐 단순 전략 백테스트 — 티커/전략(RSI·MA크로스·볼린저)/기간/자본 입력, RSI는 매수·매도 슬라이더, `backtester.run_backtest` 🔑
-- [ ] 성과 요약: 전략수익률(vs B&H)·CAGR·MDD·샤프·승률·거래횟수
-- [ ] 자산곡선 라인차트 + 낙폭 area차트 + 거래내역 표
+### 5. 🧪 백테스트 (backtest.py) 🔵(계산 온디맨드) — ✅ 이전 완료 (web/services/backtest.py, templates/backtest.html)
+- [x] ℹ️ 백테스트 설명 expander (초보용) → `<details>`
+- [x] 🎯 실제 시그널 백테스트 — 보유기간(5/10/20) + 실행, `signal_backtest.run_backtest`, MAJORS 20+보유 → HTMX POST /t/backtest/signal
+- [x] 📐 단순 전략 백테스트 — 티커/전략/기간/자본 + RSI 매수·매도 입력, `backtester.run_backtest` → HTMX POST /t/backtest/simple
+- [x] 성과 요약: 전략수익률(vs B&H)·CAGR·MDD·샤프·승률·거래횟수
+- [x] 자산곡선 라인차트 + 낙폭 area차트 → 대체: **서버 생성 인라인 SVG**(외부 JS 라이브러리 없음) + 거래내역 표
+- 검증: 실제 NVDA 2년 RSI 백테스트로 SVG 차트·지표 생성 확인
 
 ---
 

@@ -24,6 +24,7 @@ from web.auth import (
 from web.deps import get_current_user, optional_user
 from web.services import (
     market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
+    backtest as bt_svc,
 )
 
 _BASE = Path(__file__).resolve().parent
@@ -165,6 +166,29 @@ async def tab_weekly_regen(request: Request, uid: str = Depends(get_current_user
     ctx["this_key"] = ctx["report"].get("week_key", "") if ctx["report"].get("available") else ""
     ctx["chosen"] = ctx["this_key"]
     return templates.TemplateResponse(request, "_weekly_report.html", ctx)
+
+
+# ── 백테스트 탭 ──
+@app.get("/t/backtest", response_class=HTMLResponse)
+async def tab_backtest(request: Request, uid: str = Depends(get_current_user)):
+    ctx = _shell_ctx(uid, active="backtest")
+    ctx["strategies"] = bt_svc.strategies()
+    return templates.TemplateResponse(request, "backtest.html", ctx)
+
+
+@app.post("/t/backtest/signal", response_class=HTMLResponse)
+async def tab_backtest_signal(request: Request, horizon: int = Form(10),
+                              uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_bt_signal.html", {"sig": bt_svc.run_signal(horizon)})
+
+
+@app.post("/t/backtest/simple", response_class=HTMLResponse)
+async def tab_backtest_simple(request: Request, ticker: str = Form("NVDA"),
+                              strategy: str = Form("rsi"), period: str = Form("2y"),
+                              capital: int = Form(10000), rsi_buy: int = Form(30),
+                              rsi_sell: int = Form(70), uid: str = Depends(get_current_user)):
+    bt = bt_svc.run_simple(ticker, strategy, period, capital, rsi_buy, rsi_sell)
+    return templates.TemplateResponse(request, "_bt_simple.html", {"bt": bt})
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──
