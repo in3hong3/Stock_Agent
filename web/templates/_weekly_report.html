@@ -1,0 +1,72 @@
+{% if toast %}<div class="toast">{{ toast }}</div>{% endif %}
+{% if not report.available %}
+<div class="muted-sm">
+  {% if chosen == this_key %}이번 주 리포트가 아직 없습니다. 위 <b>‘이번 주 다시 종합’</b> 버튼을 누르면
+  지금까지 쌓인 이번 주 영상으로 즉시 만들 수 있어요. (평소엔 매주 일요일 저녁 자동 발행){% else %}해당 주차 리포트가 없습니다.{% endif %}
+</div>
+{% else %}
+<div class="paper-masthead">
+  <div class="paper-title" style="font-size:30px;">週間 유튜버 리포트</div>
+  <div class="paper-sub">{{ report.start }} ~ {{ report.end }} · {{ report.week_key }} · 발행 {{ report.published_at }}</div>
+</div>
+
+<div class="metric-row">
+  <div class="metric"><div class="m-label">📹 이번 주 영상</div><div class="m-val">{{ report.video_count }}개</div></div>
+  <div class="metric"><div class="m-label">📺 채널 수</div><div class="m-val">{{ report.channel_count }}개</div></div>
+  <div class="metric"><div class="m-label">🎯 다뤄진 종목</div><div class="m-val">{{ report.stock_count }}개</div></div>
+</div>
+
+{% if report.narrative_html %}
+<hr class="sep">
+<div class="paper-front">{{ report.narrative_html|safe }}</div>
+{% if report.is_fallback %}<div class="muted-sm">※ LLM 종합 미사용 — 집계 기반 요약본입니다 (OPENAI_API_KEY 미설정).</div>{% endif %}
+{% endif %}
+
+{% if report.surges or report.tone_flips %}
+<hr class="sep">
+<h4>📈 지난주 대비 변화</h4>
+<div class="paper-cols" style="grid-template-columns:1fr 1fr;">
+  <div>
+    <b>🔺 언급 급증</b>
+    {% for s in report.surges %}<div class="muted-sm">• <b>{{ s.ticker }}</b> · {{ s.prior }}회 → <b>{{ s.this_week }}회</b></div>{% endfor %}
+    {% if not report.surges %}<div class="muted-sm">급증 종목 없음</div>{% endif %}
+  </div>
+  <div>
+    <b>🔄 톤 반전</b>
+    {% for f in report.tone_flips %}<div class="muted-sm">{{ f.arrow }} <b>{{ f.ticker }}</b> · {{ f.prior }} → <b>{{ f.now }}</b></div>{% endfor %}
+    {% if not report.tone_flips %}<div class="muted-sm">반전 종목 없음</div>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if report.top_mentions %}
+<hr class="sep">
+<h4>🏆 이번 주 언급 TOP 종목</h4>
+<div class="muted-sm">막대: 🔴 매수 · ⚫ 중립 · 🔵 주의 비중</div>
+{% for t in report.top_mentions %}
+<div class="top-row">
+  <div class="top-name">{{ t.held }}<b>{{ t.name }}</b> <code>{{ t.ticker }}</code></div>
+  <div class="sent-bar">
+    {% if t.bar %}
+    <span style="width: {{ t.bar.b }}%; background: #FF4B4B;"></span>
+    <span style="width: {{ t.bar.n }}%; background: #475569;"></span>
+    <span style="width: {{ t.bar.c }}%; background: #4B7BFF;"></span>
+    {% endif %}
+  </div>
+  <div class="top-score muted-sm">{{ t.total }}회 · <b class="{{ t.score_cls }}">{{ '%+d'|format(t.score) }}</b></div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if report.has_held %}
+<hr class="sep">
+<h4>💼 내 보유종목 관련 코멘트</h4>
+{% for v in report.my_comments %}
+<div class="news-item" style="border:none;">
+  {% if v.link %}<a href="{{ v.link }}" target="_blank" rel="noopener">{{ v.title }}</a>{% else %}{{ v.title }}{% endif %}
+  <div class="muted-sm">{{ v.channel }} · {{ v.date }} · <code>{{ v.tags }}</code></div>
+</div>
+{% endfor %}
+{% if not report.my_comments %}<div class="muted-sm">이번 주 영상에서 보유종목 언급이 없습니다.</div>{% endif %}
+{% endif %}
+{% endif %}

@@ -1,0 +1,83 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>📅 주간 유튜버 리포트</h3>
+<div class="muted-sm">한 주(월~일) 동안 유튜버들이 다룬 종목·톤·테마를 종합합니다. 매주 일요일 저녁 자동 발행.</div>
+
+{# 🧭 섹터 관심도 #}
+{% if insights.available %}
+{% if insights.sectors %}
+<details class="news-card" style="margin-top:12px;">
+  <summary>🧭 <b>어느 섹터를 보고 있나</b> — 최근 {{ insights.sector_days }}일 유튜버 매수 쏠림 (콜 {{ insights.recent_call_count }}개)</summary>
+  <div class="muted-sm" style="margin:6px 0;">산출 {{ insights.computed_at }} · 점수 = (매수-주의)/전체 · Δ = 이전 동기간 대비 · 매주 갱신</div>
+  {% for s in insights.sectors %}
+  <div class="sector-row">
+    <b>{{ s.held }} {{ s.sector }}</b>
+    {% if s.delta > 0 %}<span class="c-up">▲{{ s.delta }}</span>{% elif s.delta < 0 %}<span class="muted-sm">▼{{ -s.delta }}</span>{% endif %}
+    <span style="float:right;" class="{{ s.score_cls }}"><b>{{ '%+d'|format(s.score) }}</b></span>
+    <div class="muted-sm">언급 {{ s.total }}회 (매수 {{ s.buy }}·중립 {{ s.neutral }}·주의 {{ s.caution }}) · {{ s.top }}</div>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% if insights.market_view %}
+<details class="news-card" style="margin-top:8px;">
+  <summary>🌡️ <b>유튜버 시황·경계 관점</b> — 지금 뭘 조심하고 뭘 노리나 (최근 영상 타임라인)</summary>
+  {% for v in insights.market_view %}
+  <div class="muted-sm" style="padding:3px 0;"><span style="color:#64748B;">{{ v.date }}</span> {{ v.badge }} <b>{{ v.title }}</b>{% if v.thesis %} <span style="color:#64748B;">— {{ v.thesis }}</span>{% endif %}</div>
+  {% endfor %}
+  <div class="toast" style="margin-top:6px;">최근 {{ insights.mv_n }}개 영상 스탠스: 🟢기회 {{ insights.mv_opp }} · 🔴경계 {{ insights.mv_caution }} → <b>{{ insights.mv_tone }}</b></div>
+</details>
+{% endif %}
+{% endif %}
+
+{# 🎯 트랙레코드 #}
+{% if trackrecord.available %}
+<details class="news-card" style="margin-top:8px;">
+  <summary>🎯 <b>{{ trackrecord.channel }}</b> 콜 적중률 — 이 채널 콜은 실제로 맞았나? ({{ trackrecord.total_calls }}개 콜 채점)</summary>
+  <div class="muted-sm" style="margin:6px 0;">검증 기간 {{ trackrecord.win_start }} ~ {{ trackrecord.win_end }} · 산출 {{ trackrecord.computed_at }} · 매주 갱신 · 매수=이후 상승 시 적중 / 주의=이후 하락(회피) 시 적중 · 알파=SPY 대비</div>
+  {% if trackrecord.buy_stats %}
+  <b>📈 매수 콜 성적</b>
+  <div class="metric-row">
+    {% for b in trackrecord.buy_stats %}
+    <div class="metric"><div class="m-label">+{{ b.horizon }}일 (N={{ b.n }})</div><div class="m-val">적중 {{ '%.0f'|format(b.hit_rate) }}%</div><div class="muted-sm c-up">알파 {{ '%+.1f'|format(b.avg_alpha) }}%</div></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if trackrecord.caution_stats %}
+  <b>⚠️ 주의 콜 성적</b>
+  <div class="metric-row">
+    {% for c in trackrecord.caution_stats %}
+    <div class="metric"><div class="m-label">+{{ c.horizon }}일 (N={{ c.n }})</div><div class="m-val">회피성공 {{ '%.0f'|format(c.hit_rate) }}%</div><div class="muted-sm">평균 {{ '%+.1f'|format(c.avg_ret) }}%</div></div>
+    {% endfor %}
+  </div>
+  <div class="toast" style="color:#FFC94B; border-color:#FFA50055;">🚩 주의 콜은 예측력이 약합니다(역지표 경향). '주의'를 매도 신호로 쓰지 마세요.</div>
+  {% endif %}
+  {% if trackrecord.ticker_rows %}
+  <b>종목별 매수 콜 성적 (5회+ 언급, +30일 알파순)</b>
+  <div class="table-scroll"><table class="rank-table">
+    <thead><tr><th>종목</th><th>매수콜</th><th>적중률</th><th>평균알파</th></tr></thead>
+    <tbody>{% for r in trackrecord.ticker_rows %}<tr>
+      <td>{{ r.name }} ({{ r.ticker }})</td><td>{{ r.buy_n }}</td>
+      <td>{{ '%.0f'|format(r.hit_rate) }}%</td><td class="c-up">{{ '%+.1f'|format(r.avg_alpha) }}%</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+</details>
+{% endif %}
+
+{# 주차 선택 + 다시 종합 #}
+<div class="hot-controls" style="margin-top:14px;">
+  <form method="get" action="/t/weekly" id="weekForm">
+    <select name="week" onchange="document.getElementById('weekForm').submit()">
+      {% for o in week_options %}<option value="{{ o.key }}" {{ 'selected' if o.sel else '' }}>{{ o.label }}</option>{% endfor %}
+    </select>
+  </form>
+  <button class="btn-primary" hx-post="/t/weekly/regen" hx-target="#weekly-body" hx-swap="innerHTML"
+          hx-disabled-elt="this" hx-indicator="#regen-ind">🔄 이번 주 다시 종합</button>
+</div>
+<div id="regen-ind" class="htmx-indicator muted-sm" style="padding:8px;">📺 이번 주 영상 종합 중… (Pinecone 스캔 + AI 종합, 20~40초)</div>
+
+<div id="weekly-body">
+  {% include "_weekly_report.html" %}
+</div>
+{% endblock %}

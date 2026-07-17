@@ -22,7 +22,9 @@ from web.auth import (
     verify_login, make_cookie_value,
 )
 from web.deps import get_current_user, optional_user
-from web.services import market, paper as paper_svc, hot as hot_svc, ml as ml_svc
+from web.services import (
+    market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
+)
 
 _BASE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE / "templates"))
@@ -147,6 +149,22 @@ async def tab_ml(request: Request, uid: str = Depends(get_current_user)):
     ctx = _shell_ctx(uid, active="ml")
     ctx.update(ml_svc.get_context())
     return templates.TemplateResponse(request, "ml.html", ctx)
+
+
+# ── 주간 리포트 탭 ──
+@app.get("/t/weekly", response_class=HTMLResponse)
+async def tab_weekly(request: Request, week: str = "", uid: str = Depends(get_current_user)):
+    ctx = _shell_ctx(uid, active="weekly")
+    ctx.update(weekly_svc.get_context(chosen=week or None))
+    return templates.TemplateResponse(request, "weekly.html", ctx)
+
+
+@app.post("/t/weekly/regen", response_class=HTMLResponse)
+async def tab_weekly_regen(request: Request, uid: str = Depends(get_current_user)):
+    ctx = weekly_svc.publish()
+    ctx["this_key"] = ctx["report"].get("week_key", "") if ctx["report"].get("available") else ""
+    ctx["chosen"] = ctx["this_key"]
+    return templates.TemplateResponse(request, "_weekly_report.html", ctx)
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──

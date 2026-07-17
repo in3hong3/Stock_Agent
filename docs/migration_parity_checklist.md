@@ -97,13 +97,15 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 - [x] 🏆 종목 스코어링(fragment) — 섹터/티커 입력 + "스코어링" 💰, `score_stocks` → HTMX POST /t/hot/score
 - [x] **fragment 격리** → HTMX 부분 갱신으로 이전 (explain-out/score-out만 교체, 페이지 rerun 없음)
 
-### 4. 📅 주간 리포트 (weekly_report.py) 🔵+💰
-- [ ] 🧭 섹터 관심도 expander — `get_insights`, 섹터별 점수·Δ증감·top티커
-- [ ] 🌡️ 시황·경계 관점 expander — market_view 타임라인(🔴경계/🟢기회/⚪중립)
-- [ ] 🎯 유튜버 콜 트랙레코드 expander — `get_trackrecord`, 매수/주의 콜 적중률·알파, 종목별 표, 잘맞은/빗나간 콜
-- [ ] 주차 선택 셀렉트박스(`list_reports`) + "이번 주 다시 종합" 버튼 💰
-- [ ] 리포트 본문(`_render_report`): 헤더, 영상/채널/종목 수 메트릭, 내러티브(LLM), 지난주 대비 변화(급증·톤반전), 언급 TOP15(감성막대), 내 보유종목 코멘트
-- [ ] 데이터: `weekly_youtube_report.*`, `youtuber_trackrecord`, `youtuber_insights`
+### 4. 📅 주간 리포트 (weekly_report.py) 🔵+💰 — ✅ 이전 완료 (web/services/weekly.py, templates/weekly.html)
+- [x] 🧭 섹터 관심도 expander — `get_insights`, 섹터별 점수·Δ증감·top티커 → `<details>`
+- [x] 🌡️ 시황·경계 관점 expander — market_view 타임라인(🔴경계/🟢기회/⚪중립) + 톤 요약
+- [x] 🎯 유튜버 콜 트랙레코드 expander — `get_trackrecord`, 매수/주의 콜 적중률·알파, 종목별 표
+- [x] 주차 선택 셀렉트박스(`list_reports`, onchange 자동제출) + "이번 주 다시 종합" 버튼 💰 → HTMX POST /t/weekly/regen
+- [x] 리포트 본문(`_render_report`): 헤더·메트릭·내러티브(md)·급증·톤반전·언급 TOP15(감성막대)·내 보유종목 코멘트 → 발행 후 partial 재사용
+- [x] 데이터: `weekly_youtube_report.*`, `youtuber_trackrecord`, `youtuber_insights`
+- 검증: 빈 상태 + 합성 데이터 채워진 경로 양쪽 렌더 통과 (로컬엔 실 데이터 없음 — 서버/cron 생성분)
+- 미이전: best/worst 콜(잘맞은/빗나간) — 서비스에 데이터는 담되 템플릿 표시 생략(후속). 그 외 동등.
 
 ### 5. 🧪 백테스트 (backtest.py) 🔵(계산 온디맨드)
 - [ ] ℹ️ 백테스트 설명 expander (초보용)
