@@ -140,19 +140,21 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 - [x] 데이터: `price_alert.*`(전역 alerts.json), `watchlist.*`(per-user), `kakao_notify`, meta(web/services/meta.py — _meta의 streamlit 의존 회피)
 - 검증: 전역 알림 CRUD(백업/복원 무오염) + per-user 토글·관심종목(격리유저) + fragment. run_alert_check(발송)은 미실행
 
-### 8. 📌 내 종목 (tracker.py) 🟢(대부분 읽기+일부 저장)
-- [ ] 빈 가격 자동 채움(`auto_fill_missing_prices`) — 진입 시 1회, 실패 종목 "다시 시도" 버튼
-- [ ] 📈 시그널 적중률 상단 카드(`get_accuracy_stats`) — 승률·매수평균수익·알파·베스트/워스트 셋업 (0건이면 숨김)
-- [ ] 🧬 펀더멘탈 분석 카드 그리드 — 밸류판정·EPS·PEG·선행PER·기관보유·내부자매수 (밸류점수순)
-- [ ] 📖 매수 기법 설명 expander
-- [ ] 🎯 상세 매매 시그널 expander — 시장국면, 종목별 액션·밸류·지표·판단근거·매매플랜(진입/손절/목표/손익비)·포지션사이징·계단식청산·차트토글
-- [ ] 📈 시그널 정확도 상세 expander — 셋업별 성적·최근 채점결과 표
-- [ ] 📈 자산 추이 expander — `load_asset_history`, area/line 차트
-- [ ] 🎤 이슈 브리핑(fragment) — 종목 pills 선택 + 브리핑 생성 💰(`summarize_all_issues`) 🔑, 시세/뉴스 새로고침
-- [ ] 🎤 유튜버 집단지성 expander — `youtuber_consensus.*`, 기간선택, 컨센서스·톤전환·신규레이더 (LLM 0) ⏱️(1800s)
-- [ ] 🤖 AI 보유종목 평가 — 성향 라디오 + 평가서 생성/강제재생성 💰(`get_or_create_eval`, Perplexity) 🔑
-- [ ] 📰 종목별 최신 이슈 — 종목별 expander 뉴스 + 차트토글
-- [ ] 데이터: `issue_tracker.*`, `signal_tracker`, `portfolio_advisor`, `youtuber_consensus`, `_meta` 시그널 캐시
+### 8. 📌 내 종목 (tracker.py) 🟢 — ✅ 이전 완료 (web/services/tracker.py, templates/tracker.html)
+- [ ] ⚠️ 빈 가격 자동 채움(`auto_fill_missing_prices`) — **보류**: 포트폴리오 탭 '📡 가격 업데이트'로 대체(부수효과 스코프 관리). 누락 시 경고만 표시
+- [x] 📈 시그널 적중률 상단 카드(`get_accuracy_stats`) — 승률·매수평균수익·알파 (0건이면 숨김)
+- [x] 🧬 펀더멘탈 분석 카드 그리드 — 밸류판정·EPS·PEG·선행PER·기관보유·내부자매수 (밸류점수순)
+- [x] 📖 매수 기법 설명 expander → `<details>`
+- [x] 🎯 상세 매매 시그널 expander — 시장국면, 종목별 액션·밸류·지표·판단근거·매매플랜(진입/손절/목표/손익비)·포지션사이징·계단식청산 (**차트토글 보류**)
+- [~] 📈 시그널 정확도 상세 — 적중률 카드로 핵심 커버. 셋업별 표는 후속(보류)
+- [x] 📈 자산 추이 — `load_asset_history` → 인라인 SVG 라인차트
+- [x] 🎤 이슈 브리핑 — 종목 체크박스 + 브리핑 생성 💰(`summarize_all_issues`) → HTMX POST /t/tracker/briefing
+- [x] 🎤 유튜버 집단지성 expander — `youtuber_consensus.*`, 컨센서스·톤전환·신규레이더 (LLM 0)
+- [x] 🤖 AI 보유종목 평가 — 성향 라디오 + 생성/강제재생성 💰(`get_or_create_eval`) → HTMX POST /t/tracker/eval
+- [x] 📰 종목별 최신 이슈 — 종목별 `<details>` 뉴스 (**차트토글 보류**)
+- [x] 데이터: `issue_tracker.*`, `signal_tracker`, `portfolio_advisor`, `youtuber_consensus`, trade_signal
+- 검증: 합성 데이터로 전 섹션(시그널카드·계단식청산·포지션사이징·집단지성·평가폼) 렌더 통과 + 빈 상태 live GET
+- **보류 3건**: 진입시 자동가격채움 / 캔들차트 토글(plotly) / 시그널 정확도 셋업별 상세표
 
 ### 9. 💼 포트폴리오 (portfolio.py) 🟢 — 가장 큼, 5개 서브탭
 - [ ] 헤더에 현재 사용자명(`current_user()`) — **contextvars 추상화 핵심**

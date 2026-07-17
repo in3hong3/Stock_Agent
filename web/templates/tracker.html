@@ -1,0 +1,138 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>📌 내 종목 트래커</h3>
+<div class="muted-sm">내 포트폴리오 종목을 자동 추적합니다. 종목 추가/수정은 '💼 포트폴리오' 탭에서 하세요.</div>
+
+{% if empty %}
+<div class="muted-sm" style="margin-top:16px;">📂 포트폴리오가 비어 있습니다. '💼 포트폴리오' 탭에서 종목을 추가하세요.</div>
+{% else %}
+
+{% if missing_price %}
+<div class="toast" style="color:#FFC94B; border-color:#FFA50055;">⚠️ 현재가가 비어있는 종목이 {{ missing_price|length }}개 있어요. '💼 포트폴리오' 탭의 '📡 가격 업데이트'로 갱신하세요.</div>
+{% endif %}
+
+{# 시그널 적중률 카드 #}
+{% set acc = accuracy %}
+{% if acc and acc.graded and acc.graded > 0 %}
+<div class="hot-hero" style="background:linear-gradient(160deg,#142028,#16181F); border-color:#00FFA355;">
+  <div style="font-weight:700;">📈 내 시그널 적중률
+    <span class="muted-sm">채점 {{ acc.graded }}건 · 대기 {{ acc.pending }}건 · 누적 {{ acc.total }}건</span></div>
+  <div class="muted-sm" style="margin-top:6px;">종합 적중률 <b>{{ (acc.win_rate ~ '%') if acc.win_rate is not none else '—' }}</b>
+    · 매수 시그널 평균수익 <b>{{ (acc.buy_avg_ret|num('{:+.1f}')) ~ '%' if acc.buy_avg_ret is not none else '—' }}</b>
+    {% if acc.alpha_win_rate is not none %} · 시장 대비 승률 <b>{{ acc.alpha_win_rate|num('{:.0f}') }}%</b>{% endif %}</div>
+</div>
+{% endif %}
+
+{# 🧬 펀더멘탈 분석 #}
+{% if fundamentals %}
+<h4>🧬 펀더멘탈 분석 — 내 종목</h4>
+<div class="muted-sm">실적(EPS)·밸류(PEG·PER)·스마트머니(기관·내부자) 종합 · 밸류점수 높은 순 (규칙 기반·무료)</div>
+<div class="hot-card-grid" style="margin-top:8px;">
+  {% for s in fundamentals %}{% set v = s.valuation %}
+  <div class="hot-card" style="border-color: rgba(148,163,184,0.3);">
+    <div class="hot-card-head"><b>{{ s.ticker }}</b>
+      <span class="muted-sm">{{ v.verdict }}</span></div>
+    <div class="muted-sm" style="margin-top:4px;">
+      ⚙️ EPS {{ (v.eps_growth|num('{:+.0f}')) ~ '%' if v.eps_growth is not none else '—' }} ·
+      PEG {{ v.peg|num('{:.2f}') if v.peg is not none else '—' }}<br>
+      📈 선행PER {{ v.forward_pe|num('{:.1f}') if v.forward_pe is not none else '—' }} ·
+      🎯 {{ (v.upside|num('{:+.0f}')) ~ '%' if v.upside is not none else '—' }}<br>
+      🏛️ 기관 {{ (v.inst_pct|num('{:.0f}')) ~ '%' if v.inst_pct is not none else '—' }} ·
+      👤 내부자 {% if v.insider_buying %}<span class="c-up">매수🟢</span>{% else %}<span class="muted-sm">특이신호 없음</span>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# 📖 매수 기법 설명 #}
+<details class="news-card" style="margin-top:12px;">
+  <summary>📖 매수 기법 — 이 시그널이 쓰는 규칙</summary>
+  <div class="muted-sm" style="margin-top:6px;">🎯 눌림목(주봉상승+MA20~50 조정+RSI 40~58) · 🚀 저항돌파(거래량130%+ADX≥22) · 🔄 과매도반등(RSI≤32+볼린저하단).
+    🏷️ 밸류에이션 게이트, 🌐 시장국면, ⚙️ 성향별 임계, 📐 미너비니 1% 리스크·계단식 청산. 참고용이며 투자 권유가 아닙니다.</div>
+</details>
+
+{# 🎯 상세 매매 시그널 #}
+{% if signals %}
+<details class="news-card" style="margin-top:8px;" open>
+  <summary>🎯 상세 매매 시그널 — 시장 국면: {{ regime.label }}</summary>
+  <div class="muted-sm" style="margin:6px 0;">{{ regime.detail|join(' · ') if regime.detail else '' }} → 전체 점수 보정 {{ regime.score_modifier|num('{:+d}') }}점</div>
+  {% for s in signals %}{% include "_signal_card.html" %}{% endfor %}
+  <div class="muted-sm">⚠️ 규칙 기반 기술 시그널. 펀더멘탈·뉴스는 AI 평가서와 함께 보세요. 투자 권유가 아닙니다.</div>
+</details>
+{% endif %}
+
+{# 📈 자산 추이 #}
+{% if asset_svg %}
+<details class="news-card" style="margin-top:8px;">
+  <summary>📈 자산 추이 ({{ asset_days }}일 기록됨)</summary>
+  <div class="muted-sm" style="margin:6px 0;">기록 시작 대비 <b>{{ asset_change|num('{:+.2f}') }}%</b></div>
+  <div class="chart-box">{{ asset_svg|safe }}</div>
+</details>
+{% endif %}
+
+{# 🎤 이슈 브리핑 (LLM) #}
+<hr class="sep">
+<h4>🎤 이슈 브리핑</h4>
+<form hx-post="/t/tracker/briefing" hx-target="#brief-out" hx-swap="innerHTML"
+      hx-disabled-elt="button" hx-indicator="#brief-ind">
+  <div class="muted-sm">브리핑할 종목 (체크 · 기본 전체)</div>
+  <div class="chk-group">
+    {% for t in tickers %}<label><input type="checkbox" name="tickers" value="{{ t }}" checked> {{ t }}</label>{% endfor %}
+  </div>
+  <button class="btn-primary" type="submit" style="margin-top:8px;">🤖 선택 종목 이슈 브리핑 생성</button>
+</form>
+<div id="brief-ind" class="htmx-indicator muted-sm" style="padding:6px;">📰 뉴스 수집 + AI 분석 중…</div>
+<div id="brief-out"></div>
+
+{# 🎤 유튜버 집단지성 #}
+{% if yt_consensus %}
+<details class="news-card" style="margin-top:12px;">
+  <summary>🎤 유튜버 집단지성 — 영상들이 내 종목을 어떻게 보나 (RAG 집계, LLM 0)</summary>
+  <div class="muted-sm" style="margin:6px 0;">수집 대본 {{ yt_count }}건 · 최근 90일</div>
+  <b>📊 내 종목 컨센서스</b>
+  {% for c in yt_consensus %}
+  {% if c.total == 0 %}<div class="muted-sm">• {{ c.ticker }}: 언급 없음</div>
+  {% else %}<div class="muted-sm">• <b>{{ c.ticker }}</b> {{ c.tone }} (점수 {{ c.score|num('{:+d}') }}) — 매수 {{ c.buy }}·중립 {{ c.neutral }}·주의 {{ c.caution }} (영상 {{ c.total }})</div>{% endif %}
+  {% endfor %}
+  {% if yt_shifts %}<b>⚠️ 톤 전환</b>
+  {% for s in yt_shifts %}<div class="muted-sm">• <b>{{ s.ticker }}</b>: 이전 {{ s.prior|num('{:+d}') }} → 최근 {{ s.recent|num('{:+d}') }}</div>{% endfor %}{% endif %}
+  {% if yt_radar %}<b>🔭 신규 종목 레이더 (미보유)</b>
+  {% for r in yt_radar %}<div class="muted-sm">• <b>{{ r.ticker }}</b> — {{ r.mentions }}회 (매수 {{ r.buy }}·중립 {{ r.neutral }}·주의 {{ r.caution }})</div>{% endfor %}{% endif %}
+</details>
+{% endif %}
+
+{# 🤖 AI 보유종목 평가 (LLM) #}
+<hr class="sep">
+<h4>🤖 AI 보유종목 평가</h4>
+<form hx-post="/t/tracker/eval" hx-target="#eval-out" hx-swap="innerHTML"
+      hx-disabled-elt="button" hx-indicator="#eval-ind">
+  <div class="chk-group">
+    {% for p in personas %}
+    <label><input type="radio" name="stance" value="{{ p.key }}" {{ 'checked' if loop.first else '' }}> {{ p.label }}</label>
+    {% endfor %}
+  </div>
+  <div style="display:flex; gap:8px; margin-top:8px;">
+    <button class="btn-primary" type="submit" name="force" value="0">📋 평가서 생성</button>
+    <button class="btn-ghost" type="submit" name="force" value="1">🔄 강제 재생성</button>
+  </div>
+</form>
+<div id="eval-ind" class="htmx-indicator muted-sm" style="padding:6px;">🔍 뉴스 검색 + 밸류에이션 + AI 평가서 작성 중… (10~30초)</div>
+<div id="eval-out"></div>
+
+{# 📰 종목별 최신 이슈 #}
+<hr class="sep">
+<h4>📰 종목별 최신 이슈</h4>
+{% for tk, info in news.items() %}
+<details class="news-card" style="margin-top:6px;">
+  <summary><b>{{ info.name }}</b> ({{ tk }})</summary>
+  {% for n in info['items'] %}
+  <div class="news-item"><a href="{{ n.link }}" target="_blank" rel="noopener">{{ n.title }}</a>
+    <div class="muted-sm">{{ n.publisher }} · {{ n.published }}</div></div>
+  {% else %}
+  <div class="muted-sm">최근 뉴스가 없습니다.</div>
+  {% endfor %}
+</details>
+{% endfor %}
+{% endif %}
+{% endblock %}

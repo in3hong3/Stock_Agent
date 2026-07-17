@@ -26,7 +26,7 @@ from urllib.parse import quote
 
 from web.services import (
     market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
-    backtest as bt_svc, journal as journal_svc, alerts as alerts_svc,
+    backtest as bt_svc, journal as journal_svc, alerts as alerts_svc, tracker as tracker_svc,
 )
 
 _BASE = Path(__file__).resolve().parent
@@ -290,6 +290,28 @@ async def alerts_buy_timings(request: Request, uid: str = Depends(get_current_us
 @app.post("/t/alerts/check", response_class=HTMLResponse)
 async def alerts_check(request: Request, uid: str = Depends(get_current_user)):
     return templates.TemplateResponse(request, "_alert_check.html", alerts_svc.check_now())
+
+
+# ── 내 종목 트래커 탭 ──
+@app.get("/t/tracker", response_class=HTMLResponse)
+async def tab_tracker(request: Request, uid: str = Depends(get_current_user)):
+    ctx = _shell_ctx(uid, active="tracker")
+    ctx.update(tracker_svc.get_context())
+    return templates.TemplateResponse(request, "tracker.html", ctx)
+
+
+@app.post("/t/tracker/briefing", response_class=HTMLResponse)
+async def tab_tracker_briefing(request: Request, uid: str = Depends(get_current_user)):
+    form = await request.form()
+    tickers = form.getlist("tickers")
+    return templates.TemplateResponse(request, "_tracker_briefing.html", tracker_svc.briefing(tickers))
+
+
+@app.post("/t/tracker/eval", response_class=HTMLResponse)
+async def tab_tracker_eval(request: Request, stance: str = Form("aggressive"),
+                           force: str = Form("0"), uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_tracker_eval.html",
+                                      tracker_svc.ai_eval(stance, force == "1"))
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──

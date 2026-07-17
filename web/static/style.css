@@ -258,3 +258,12 @@ h5 { margin: 6px 0; font-size: 0.95rem; }
 .alert-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
 .btn-sm { padding: 4px 10px; font-size: 0.8rem; }
+
+/* ── 내 종목 트래커 ── */
+.sig-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; margin: 8px 0; }
+.sig-head { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+.ladder { margin-top: 6px; padding: 6px 10px; background: rgba(168,85,247,0.08);
+  border-left: 3px solid #a855f7; border-radius: 4px; font-size: 0.78rem; }
+.chk-group { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 6px 0; }
+.chk-group label { font-size: 0.85rem; color: var(--text); cursor: pointer; }

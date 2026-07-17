@@ -1,0 +1,6 @@
+{% if error %}
+<div class="toast" style="color:#FFC94B; border-color:#FFA50055;">⚠️ {{ error }}</div>
+{% else %}
+<div class="muted-sm" style="margin-top:6px;">{{ label }} 관점 · 생성 {{ time }}{{ ' · 캐시' if cached else '' }}</div>
+<div class="paper-front">{{ html|safe }}</div>
+{% endif %}

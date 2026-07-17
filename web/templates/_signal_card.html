@@ -1,0 +1,35 @@
+{% set v = s.valuation or {} %}
+<div class="sig-card">
+  <div class="sig-head">{{ s.icon }} <b>{{ s.ticker }}</b> — {{ s.action }}
+    <span class="c-up" style="font-size:0.85rem;">{{ s.setup or '' }}</span></div>
+  {% if v.verdict %}<div class="muted-sm">🏷️ 밸류에이션: <b>{{ v.verdict }}</b> {{ v.note or '' }}</div>{% endif %}
+  <div class="muted-sm">현재가 {{ s.price|num('{:,.2f}') }} · 수익률 {{ (s.profit_rate|num('{:+.1f}')) ~ '%' if s.profit_rate is not none else '—' }}
+    · 점수 {{ s.adj_score|num('{:+.0f}') }} · 주봉 {{ s.wk_trend or '?' }}추세 · {{ s.trend_regime or '?' }}(ADX {{ s.adx or '?' }})
+    · RSI {{ s.rsi or '?' }} · ATR {{ s.atr_pct or '?' }}%</div>
+
+  <div class="paper-cols" style="grid-template-columns:3fr 2fr; gap:14px; margin-top:6px;">
+    <div>
+      <b>📋 판단 근거</b>
+      {% for pts, reason in s.reasons %}<div class="muted-sm">- {{ pts }} {{ reason }}</div>{% endfor %}
+      {% for ex in (s.extra or []) %}<div class="muted-sm">- {{ ex }}</div>{% endfor %}
+    </div>
+    <div>
+      <b>🎯 매매 플랜</b>
+      {% if s.entry %}
+      <div class="muted-sm">🟢 진입 {{ s.entry|num('{:,.2f}') }}</div>
+      <div class="muted-sm">🛑 손절 {{ s.stop|num('{:,.2f}') }} <span class="c-down">({{ ((s.stop/s.entry-1)*100)|num('{:+.1f}') }}%)</span></div>
+      <div class="muted-sm">🎯 목표 {{ s.target|num('{:,.2f}') }} <span class="c-up">({{ ((s.target/s.entry-1)*100)|num('{:+.1f}') }}%)</span></div>
+      <div class="muted-sm">⚖️ 손익비 1 : {{ s.rr }}</div>
+      {% if s.size_qty %}<div class="muted-sm">💰 권장 매수 <b class="c-up">{{ s.size_qty|num('{:,}') }}주</b>
+        (투입 ${{ s.size_invest|num('{:,.0f}') }} · 시드 {{ s.size_weight_pct }}%) · 최대손실 ${{ s.size_max_loss|num('{:,.0f}') }}</div>{% endif %}
+      {% else %}
+      <div class="muted-sm">- {{ s.plan or '관망 구간' }}</div>
+      {% endif %}
+      {% if s.exit_ladder and s.avg_price and s.avg_price > 0 %}
+      {% set L = s.exit_ladder %}
+      <div class="ladder">📊 계단식 청산: 1차 {{ L.ladder_1.line|num('{:,.2f}') }}→30% · 2차 {{ L.ladder_2.line|num('{:,.2f}') }}→30% · 3차 {{ L.ladder_3.line|num('{:,.2f}') }}→40% · 하드스톱 {{ L.hard_stop|num('{:,.2f}') if L.hard_stop else '—' }}</div>
+      {% endif %}
+      <div class="muted-sm" style="color:#64748B;">지지 {{ s.support|num('{:,.1f}') }} · 저항 {{ s.resistance|num('{:,.1f}') }} · MA50 {{ s.ma50|num('{:,.1f}') }} · MA200 {{ s.ma200 or '?' }}</div>
+    </div>
+  </div>
+</div>

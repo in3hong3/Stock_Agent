@@ -1,0 +1,6 @@
+{% if error %}
+<div class="toast" style="color:#FFC94B; border-color:#FFA50055;">⚠️ {{ error }}</div>
+{% else %}
+<div class="muted-sm" style="margin-top:6px;">📋 이슈 브리핑 (생성 {{ time }})</div>
+<div class="paper-front">{{ html|safe }}</div>
+{% endif %}
