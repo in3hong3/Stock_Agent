@@ -1,0 +1,9 @@
+<div class="signal-row">
+  {% if r.thumb %}<img class="signal-thumb" src="{{ r.thumb }}" alt="{{ r.ticker }}">{% endif %}
+  <div class="signal-info">
+    <div><b>{{ r.name }}</b> <code>{{ r.ticker }}</code></div>
+    {% if r.held_txt %}<div class="muted-sm">{{ r.held_txt }}</div>{% endif %}
+    <div class="prog"><div class="prog-fill" style="width: {{ r.prob_w }}%;"></div></div>
+    <div class="muted-sm">상승 확률 {{ r.prob_pct }} · 기준일 {{ r.as_of }} · {{ ret.hor_txt }} 뒤 전망</div>
+  </div>
+</div>

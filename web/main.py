@@ -22,7 +22,7 @@ from web.auth import (
     verify_login, make_cookie_value,
 )
 from web.deps import get_current_user, optional_user
-from web.services import market, paper as paper_svc, hot as hot_svc
+from web.services import market, paper as paper_svc, hot as hot_svc, ml as ml_svc
 
 _BASE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE / "templates"))
@@ -139,6 +139,14 @@ async def tab_hot_score(request: Request, query: str = Form(""),
                         uid: str = Depends(get_current_user)):
     ctx = hot_svc.score(query)
     return templates.TemplateResponse(request, "_hot_score.html", ctx)
+
+
+# ── AI 신호 탭 (표시 전용) ──
+@app.get("/t/ml", response_class=HTMLResponse)
+async def tab_ml(request: Request, uid: str = Depends(get_current_user)):
+    ctx = _shell_ctx(uid, active="ml")
+    ctx.update(ml_svc.get_context())
+    return templates.TemplateResponse(request, "ml.html", ctx)
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──

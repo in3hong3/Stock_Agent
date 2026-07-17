@@ -80,13 +80,13 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 - [x] 데이터: `market_overview.get_macro_data`, `daily_paper.*`, `event_calendar.*`, `issue_tracker.get_portfolio_holdings`
 - 남은 것: 매크로 스파크라인 상세, 자동발행(보류). 그 외 기능 동등.
 
-### 2. 🧠 AI 신호 (ml_signals.py) 🔵 — 표시 전용(서버 torch 금지)
-- [ ] 3개 서브탭: 데일리 판정 / 상승확률 / 패턴 감지
-- [ ] **데일리 판정**: `data/market_scan.json` 로드(cron 생성), verdict 색상별(🔴error/🟡warn/🟢success), 지수·보유종목 표(10일/21일%·고점比·MA200/50·패턴플래그)
-- [ ] **상승확률(수익률 모델)**: `ml/signals/latest.json`, 종목별 상승확률 progress바 + 썸네일, 보유종목 매칭/미매칭, 한국종목 제외 안내, AUC 메트릭, 미보유 신호 expander
-- [ ] **패턴 감지**: `ml/signals/patterns_latest.json`, 이중바닥 등 패턴확률, 감지 종목 카드 + 과거 통계(이벤트스터디), 전체 스캔 확률 expander, 패턴 통계 expander
-- [ ] "이 신호들은 어떻게 만들어지나요?" 설명 expander
-- [ ] 데이터: JSON 파일 3개만 읽음(추론 없음) — **이전 가장 쉬움**
+### 2. 🧠 AI 신호 (ml_signals.py) 🔵 — 표시 전용(서버 torch 금지) — ✅ 이전 완료 (web/services/ml.py, templates/ml.html)
+- [x] 3개 서브탭: 데일리 판정 / 상승확률 / 패턴 감지 → 클라이언트 JS 토글(전부 서버 렌더, 데이터 싸서 한 번에)
+- [x] **데일리 판정**: `data/market_scan.json`, verdict 색상별(🔴/🟡/🟢/info), 지수·보유종목 표
+- [x] **상승확률(수익률 모델)**: `latest.json`, 상승확률 progress바 + 썸네일(base64 data URI), 보유매칭, 한국종목 제외 안내, AUC 메트릭, 미보유 expander
+- [x] **패턴 감지**: `patterns_latest.json`, 패턴확률 카드 + 과거통계, 전체스캔 expander, 패턴통계 expander
+- [x] "이 신호들은 어떻게 만들어지나요?" 설명 expander → `<details>`
+- [x] 데이터: JSON 파일 3개만 읽음(추론 없음)
 
 ### 3. 🔥 핫 섹터 (hot_sectors.py) 🔵+💰 — ✅ 이전 완료 (web/services/hot.py, templates/hot.html)
 - [x] "세부 테마 ETF 포함" 체크박스 + 새로고침 버튼 → GET 파라미터(themes/refresh), 체크박스 onchange 자동 제출

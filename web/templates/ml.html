@@ -1,0 +1,129 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>🧠 AI 신호 (실험적)</h3>
+
+<div class="subtabs" id="mlSub">
+  <button class="subtab active" data-p="daily">📋 데일리 판정</button>
+  <button class="subtab" data-p="ret">📈 상승확률 (수익률 모델)</button>
+  <button class="subtab" data-p="pattern">🔍 패턴 감지 (이중바닥)</button>
+</div>
+
+{# ── 데일리 판정 ── #}
+<div class="subpanel active" data-p="daily">
+  {% if not daily.available %}
+  <div class="muted-sm">아직 판정이 없습니다 — 매일 미국장 마감 후(KST 오전) 자동 생성됩니다.</div>
+  {% else %}
+  <div class="muted-sm">규칙 기반 패턴 탐지 + 이벤트 스터디 통계(S&P500 496종목, 2020~2026)로 만든
+    자동 판정입니다. 투자 자문이 아니라 데이터 참고 자료입니다. · 생성 {{ daily.generated_at }}</div>
+  {% for v in daily.verdict %}<div class="verdict {{ v.cls }}">{{ v.text }}</div>{% endfor %}
+  {% for title, rows in [("📊 지수", daily.market_rows), ("📦 보유 종목", daily.holdings_rows)] %}
+    {% if rows %}
+    <h5 style="margin-top:14px;">{{ title }}</h5>
+    <div class="table-scroll"><table class="rank-table">
+      <thead><tr><th>종목</th><th>이름</th><th>현재가</th><th>10일%</th><th>21일%</th>
+        <th>고점比%</th><th>200일선</th><th>50일선</th><th>패턴</th></tr></thead>
+      <tbody>{% for r in rows %}<tr>
+        <td><b>{{ r.ticker }}</b></td><td>{{ r.name }}</td><td>{{ r.price }}</td>
+        <td class="{{ 'c-up' if r.ret10 >= 0 else 'c-down' }}">{{ r.ret10 }}</td>
+        <td class="{{ 'c-up' if r.ret21 >= 0 else 'c-down' }}">{{ r.ret21 }}</td>
+        <td>{{ r.off_high }}</td><td>{{ r.ma200 }}</td><td>{{ r.ma50 }}</td><td>{{ r.flags }}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+  {% endfor %}
+  {% endif %}
+</div>
+
+{# ── 상승확률 ── #}
+<div class="subpanel" data-p="ret">
+  {% if not ret.available %}
+  <div class="muted-sm">아직 생성된 신호가 없습니다 — 로컬에서 <code>python ml/predict.py</code> 실행 후 배포하세요.</div>
+  {% else %}
+  <div class="muted-sm">과거 {{ ret.win_txt }} 캔들차트를 CNN이 보고 매긴 <b>{{ ret.hor_txt }} 뒤 상승 확률</b>입니다.
+    약한 우위 모델이라 절대값보다 <b>종목 간 상대 순위</b>로만 참고하세요.</div>
+  <div class="metric-row">
+    <div class="metric"><div class="m-label">생성 시각</div><div class="m-val">{{ ret.generated_at }}</div></div>
+    <div class="metric"><div class="m-label">검증 AUC</div><div class="m-val">{{ ret.auc_str }}</div></div>
+    <div class="metric"><div class="m-label">보유 종목 신호</div><div class="m-val">{{ ret.held_count }}</div></div>
+  </div>
+  {% if ret.ref_missing %}<div class="toast">🔄 신호 없는 보유 종목: <b>{{ ret.ref_missing|join(', ') }}</b> — 로컬에서 <code>python ml/predict.py</code> 재실행 후 배포하면 채워집니다.</div>{% endif %}
+  {% if ret.kr_missing %}<div class="muted-sm">ℹ️ {{ ret.kr_missing|join(', ') }}는 한국 종목 — 미국주 전용 모델이라 대상 아님.</div>{% endif %}
+  {% for r in ret.rows %}{% include "_ml_signal_row.html" %}{% endfor %}
+  {% if ret.extras %}
+  <details class="news-card" style="margin-top:10px;">
+    <summary>관심종목·기타 신호 {{ ret.extras|length }}개 (미보유)</summary>
+    {% for r in ret.extras %}{% include "_ml_signal_row.html" %}{% endfor %}
+  </details>
+  {% endif %}
+  {% endif %}
+</div>
+
+{# ── 패턴 감지 ── #}
+<div class="subpanel" data-p="pattern">
+  {% if not pattern.available %}
+  <div class="muted-sm">아직 패턴 스캔 결과가 없습니다 — 로컬에서 <code>python ml/predict_pattern.py</code> 실행 후 배포하세요.</div>
+  {% else %}
+  <div class="muted-sm">패턴 인식 CNN(검증 AUC {{ pattern.auc_str }})이 각 보유 종목의 최근 {{ pattern.win_txt }} 차트에서
+    <b>{{ pattern.pattern_kr }}</b> 모양을 찾습니다. 매매 신호가 아니라 '패턴 발견 + 그 패턴의 과거 통계' 정보입니다.</div>
+  <div class="metric-row">
+    <div class="metric"><div class="m-label">스캔 시각</div><div class="m-val">{{ pattern.generated_at }}</div></div>
+    <div class="metric"><div class="m-label">스캔 종목</div><div class="m-val">{{ pattern.scan_count }}개</div></div>
+    <div class="metric"><div class="m-label">패턴 감지</div><div class="m-val">{{ pattern.detected_count }}개</div></div>
+  </div>
+  {% if not pattern.detected %}
+  <div class="toast" style="color:var(--point);">✅ 현재 스캔된 {{ pattern.scan_count }}개 종목 중 {{ pattern.pattern_kr }} 패턴이 감지된 종목은 없습니다.</div>
+  {% else %}
+    {% for c in pattern.detected %}
+    <div class="signal-row">
+      {% if c.thumb %}<img class="signal-thumb" src="{{ c.thumb }}" alt="{{ c.ticker }}">{% endif %}
+      <div class="signal-info">
+        <div><b>{{ c.name }}</b> <code>{{ c.ticker }}</code></div>
+        {% if c.held_txt %}<div class="muted-sm">{{ c.held_txt }}</div>{% endif %}
+        <div class="prog"><div class="prog-fill" style="width: {{ c.prob_w }}%;"></div></div>
+        <div class="muted-sm">{{ pattern.pattern_kr }} 확률 {{ c.prob_pct }}{{ c.rule }} · 기준일 {{ c.as_of }}</div>
+        {% if pattern.stats_summary %}<div class="toast" style="margin-top:6px;">📊 과거 통계 ({{ pattern.n_events }}건): {{ pattern.stats_summary }}</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% endif %}
+  <details class="news-card" style="margin-top:10px;">
+    <summary>전체 종목 스캔 확률 보기</summary>
+    {% for s in pattern.all_scans %}
+    <div style="padding:4px 0;">
+      <div class="muted-sm">{{ s.ticker }} · {{ s.name }} — {{ s.prob_pct }}</div>
+      <div class="prog"><div class="prog-fill" style="width: {{ s.prob_w }}%;"></div></div>
+    </div>
+    {% endfor %}
+  </details>
+  {% if pattern.stats_summary %}
+  <details class="news-card" style="margin-top:10px;">
+    <summary>'{{ pattern.pattern_kr }}' 패턴의 과거 통계 (이벤트 스터디)</summary>
+    <div class="muted-sm" style="margin-top:6px;">
+      • 표본: S&P500 496종목, 2020~2026, 이벤트 {{ pattern.n_events }}건<br>
+      • 결과: {{ pattern.stats_summary }}<br>
+      • 방법: 승률을 기저율(아무 날) 대비로 보고, 전/후반 교차검증 통과한 결론만 기재
+    </div>
+  </details>
+  {% endif %}
+  {% endif %}
+</div>
+
+<details class="news-card" style="margin-top:16px;">
+  <summary>이 신호들은 어떻게 만들어지나요?</summary>
+  <div class="muted-sm" style="margin-top:6px;">
+    • <b>상승확률 모델</b>: 과거 6개월 차트 이미지 → 1개월 뒤 +5% 상승 확률. S&P500 8.6만 장으로 학습, 검증 AUC 0.536 = 약한 우위 → 상대 순위로만 참고.<br>
+    • <b>패턴 인식 모델</b>: 규칙 탐지기가 자동 라벨링한 2.2만 장으로 학습, 검증 AUC 0.988. 패턴을 '찾는' 것이고, 좋은지 나쁜지는 이벤트 스터디 통계가 말해줍니다.<br>
+    • 두 모델 다 로컬 GPU에서 추론해 결과 JSON만 서버로 배포 — 서버에서는 표시만 합니다.
+  </div>
+</details>
+
+<script>
+document.getElementById('mlSub').addEventListener('click', function (e) {
+  var btn = e.target.closest('.subtab');
+  if (!btn) return;
+  var p = btn.dataset.p;
+  document.querySelectorAll('#mlSub .subtab').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.subpanel').forEach(pan => pan.classList.toggle('active', pan.dataset.p === p));
+});
+</script>
+{% endblock %}
