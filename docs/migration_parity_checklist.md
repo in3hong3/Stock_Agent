@@ -88,14 +88,14 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 - [ ] "이 신호들은 어떻게 만들어지나요?" 설명 expander
 - [ ] 데이터: JSON 파일 3개만 읽음(추론 없음) — **이전 가장 쉬움**
 
-### 3. 🔥 핫 섹터 (hot_sectors.py) 🔵+💰
-- [ ] "세부 테마 ETF 포함" 체크박스 + 새로고침 버튼
-- [ ] 섹터 모멘텀 스캔(`scan_sectors`) ⏱️(1800s) — 로딩 스피너
-- [ ] 🔥 핫 섹터 카드 그리드(상위) — 1개월 수익률·벤치대비
-- [ ] 전체 랭킹 표 — 1주/1개월/3개월%·vs벤치·모멘텀점수, 색상 스타일(빨강↑/파랑↓)
-- [ ] 🤖 AI 섹터 해설(fragment) — 드롭다운 선택 + "AI 해설 생성" 💰, `explain_sector`, 검색키 없으면 에러, 🔑결과유지
-- [ ] 🏆 종목 스코어링(fragment) — 섹터/티커 입력 + "스코어링" 💰, `score_stocks`, 100점 랭킹, 🔑결과유지
-- [ ] **fragment 격리** → HTMX 부분 갱신으로 자연스럽게 이전됨
+### 3. 🔥 핫 섹터 (hot_sectors.py) 🔵+💰 — ✅ 이전 완료 (web/services/hot.py, templates/hot.html)
+- [x] "세부 테마 ETF 포함" 체크박스 + 새로고침 버튼 → GET 파라미터(themes/refresh), 체크박스 onchange 자동 제출
+- [x] 섹터 모멘텀 스캔(`scan_sectors`) ⏱️(1800s) → 프로세스 TTL 캐시(themes별)
+- [x] 🔥 핫 섹터 카드 그리드(상위) — 1개월 수익률·벤치대비
+- [x] 전체 랭킹 표 — 1주/1개월/3개월%·vs벤치·모멘텀점수, 색상 스타일(빨강↑/파랑↓)
+- [x] 🤖 AI 섹터 해설(fragment) — 드롭다운 + "AI 해설 생성" 💰, `explain_sector` → HTMX POST /t/hot/explain
+- [x] 🏆 종목 스코어링(fragment) — 섹터/티커 입력 + "스코어링" 💰, `score_stocks` → HTMX POST /t/hot/score
+- [x] **fragment 격리** → HTMX 부분 갱신으로 이전 (explain-out/score-out만 교체, 페이지 rerun 없음)
 
 ### 4. 📅 주간 리포트 (weekly_report.py) 🔵+💰
 - [ ] 🧭 섹터 관심도 expander — `get_insights`, 섹터별 점수·Δ증감·top티커

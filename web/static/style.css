@@ -166,3 +166,35 @@ h5 { margin: 6px 0; font-size: 0.95rem; }
 .news-item { padding: 6px 0; border-top: 1px solid var(--border); margin-top: 6px; }
 .news-item a { color: var(--text); text-decoration: none; font-size: 0.85rem; }
 .news-item a:hover { color: var(--point); }
+
+/* ── 핫 섹터 ── */
+.hot-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
+.hot-controls label { font-size: 0.88rem; color: var(--text); cursor: pointer; }
+.btn-ghost {
+  padding: 8px 14px; border-radius: 10px; text-decoration: none; font-size: 0.85rem;
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+}
+.btn-ghost:hover { border-color: var(--point); }
+.hot-hero {
+  background: linear-gradient(160deg, #2A1414, #16181F); border: 1px solid #FF4B4B55;
+  border-radius: 14px; padding: 14px 18px; margin-bottom: 12px;
+}
+.hot-hero-title { font-weight: 700; font-size: 1.05rem; margin-bottom: 10px; }
+.hot-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.hot-card { background: var(--card); border: 1px solid #FF4B4B33; border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.hot-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.hot-card-name { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+.table-scroll { overflow-x: auto; margin: 8px 0; }
+.rank-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.rank-table th, .rank-table td { padding: 7px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+.rank-table th:nth-child(-n+3), .rank-table td:nth-child(-n+3) { text-align: left; }
+.rank-table th { color: var(--muted); font-weight: 600; font-size: 0.78rem; }
+.c-up { color: var(--up); font-weight: 700; }
+.c-down { color: var(--down); font-weight: 700; }
+.sep { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.inline-form { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.inline-form select, .inline-form input[type=text] {
+  height: 40px; padding: 0 12px; border-radius: 10px; background: var(--bg);
+  color: var(--text); border: 1px solid var(--border); font-size: 0.9rem; min-width: 220px;
+}
+.inline-form .btn-primary { padding: 0 18px; }

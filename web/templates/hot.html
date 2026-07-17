@@ -1,0 +1,99 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>🔥 AI 핫 섹터 조사</h3>
+<div class="muted-sm">미국 섹터·테마 ETF의 상대강도(모멘텀)를 정량 측정해 '지금 뜨는 섹터'를 랭킹하고,
+  AI가 그 이유를 최신 뉴스 기반으로 해설합니다.</div>
+
+<div class="hot-controls">
+  <form method="get" action="/t/hot" id="themeForm">
+    <label>
+      <input type="checkbox" name="themes" value="1" {{ 'checked' if include_themes else '' }}
+             onchange="document.getElementById('themeForm').submit()">
+      세부 테마 ETF 포함 (반도체·원전·방산·바이오 등)
+    </label>
+  </form>
+  <a class="btn-ghost" href="/t/hot?themes={{ 1 if include_themes else 0 }}&refresh=1">🔄 새로고침</a>
+</div>
+
+{% if error %}
+<div class="toast" style="color: var(--up); border-color:#FF4B4B55;">❌ {{ error }}</div>
+{% else %}
+<div class="muted-sm" style="margin:6px 0 12px;">
+  기준: {{ generated }} · 벤치마크 SPY 1개월 {{ '%+.1f'|format(benchmark_1m) if benchmark_1m is not none else '-' }}% ·
+  30분 캐시 · 모멘텀 = 1주 0.2 + 1개월 0.5 + 3개월 0.3 + 벤치 초과 가산
+</div>
+
+{# 🔥 핫 섹터 카드 #}
+<div class="hot-hero">
+  <div class="hot-hero-title">🔥 지금 뜨는 섹터 TOP {{ hot_cards|length }}</div>
+  <div class="hot-card-grid">
+    {% for c in hot_cards %}
+    <div class="hot-card">
+      <div class="hot-card-head">
+        <span class="hot-card-name">{{ c.name }}</span>
+        <span class="muted-sm">{{ c.ticker }}·{{ c.kind }}</span>
+      </div>
+      <div class="{{ c.r_1m_cls }}" style="font-size:1.1rem; font-weight:700; margin:3px 0 1px;">{{ c.r_1m }}%</div>
+      <div class="muted-sm">1개월 · 벤치대비 <span class="{{ c.rs_1m_cls }}">{{ c.rs_1m }}%p</span></div>
+    </div>
+    {% endfor %}
+    {% if not hot_cards %}<div class="muted-sm">핫 섹터가 없습니다.</div>{% endif %}
+  </div>
+</div>
+
+{# 전체 랭킹 표 #}
+<div class="table-scroll">
+  <table class="rank-table">
+    <thead><tr>
+      <th>티커</th><th>섹터/테마</th><th>구분</th>
+      <th>1주%</th><th>1개월%</th><th>3개월%</th><th>vs벤치%p</th><th>모멘텀점수</th>
+    </tr></thead>
+    <tbody>
+      {% for r in table_rows %}
+      <tr>
+        <td><b>{{ r.ticker }}</b></td><td>{{ r.name }}</td><td class="muted-sm">{{ r.kind }}</td>
+        {% for cell in r.cells %}<td class="{{ cell.cls }}">{{ cell.s }}</td>{% endfor %}
+        <td>{{ r.score }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="muted-sm">vs벤치 = SPY 대비 1개월 초과수익 · 빨강 상승 / 파랑 하락</div>
+
+{# 🤖 AI 섹터 해설 #}
+<hr class="sep">
+<h4>🤖 AI 섹터 해설</h4>
+<div class="muted-sm">'지금 뜨는 섹터' 중 하나를 골라 '왜 지금 강한지'를 최신 뉴스 기반으로 심층 분석합니다. (LLM 웹검색 — 토큰 비용 발생)</div>
+{% if hot_options %}
+<form class="inline-form" hx-post="/t/hot/explain" hx-target="#explain-out" hx-swap="innerHTML"
+      hx-disabled-elt="button" hx-indicator="#explain-ind">
+  <input type="hidden" name="themes" value="{{ 1 if include_themes else 0 }}">
+  <select name="ticker">
+    {% for o in hot_options %}<option value="{{ o.ticker }}">{{ o.label }}</option>{% endfor %}
+  </select>
+  <button class="btn-primary" type="submit">📝 AI 해설 생성</button>
+</form>
+<div id="explain-ind" class="htmx-indicator muted-sm" style="padding:8px;">📰 최신 뉴스·자금흐름 검색 + 분석 작성 중… (15~30초)</div>
+<div id="explain-out"></div>
+{% else %}
+<div class="muted-sm">핫 섹터가 없어 해설 대상이 없습니다.</div>
+{% endif %}
+
+{# 🏆 종목 스코어링 #}
+<hr class="sep">
+<h4>🏆 종목 스코어링 (월스트리트 100점)</h4>
+<div class="muted-sm">섹터/테마를 입력하면 그 안에서 8-10곳을 발굴해 랭킹, 티커를 나열하면 그 종목들만 점수화합니다.
+  밸류에이션(30) + 미래 성장 모멘텀(40) + 경제적 해자(30). (LLM 웹검색 — 토큰 비용)</div>
+{% if hot_names %}<div class="muted-sm">💡 지금 핫한 섹터: {{ hot_names }}</div>{% endif %}
+<form class="inline-form" hx-post="/t/hot/score" hx-target="#score-out" hx-swap="innerHTML"
+      hx-disabled-elt="button" hx-indicator="#score-ind">
+  <input type="text" name="query" placeholder="예: 원전  /  방산  /  NVDA TSLA AVGO" style="flex:1;">
+  <button class="btn-primary" type="submit">🏆 스코어링</button>
+</form>
+<div id="score-ind" class="htmx-indicator muted-sm" style="padding:8px;">📰 수주·계약·밸류에이션 검색 + 100점 랭킹 작성 중… (20~40초)</div>
+<div id="score-out"></div>
+{% endif %}
+
+<div class="muted-sm" style="margin-top:16px;">⚠️ ETF 모멘텀·AI 스코어링은 분석 참고자료이며 미래 수익을 보장하지 않습니다. 투자 권유가 아닙니다.</div>
+{% endblock %}

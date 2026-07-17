@@ -22,7 +22,7 @@ from web.auth import (
     verify_login, make_cookie_value,
 )
 from web.deps import get_current_user, optional_user
-from web.services import market, paper as paper_svc
+from web.services import market, paper as paper_svc, hot as hot_svc
 
 _BASE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE / "templates"))
@@ -116,6 +116,29 @@ async def tab_paper_publish(request: Request, uid: str = Depends(get_current_use
         "status_msg": result["status_msg"],
     }
     return templates.TemplateResponse(request, "_paper_body.html", ctx)
+
+
+# ── 핫 섹터 탭 ──
+@app.get("/t/hot", response_class=HTMLResponse)
+async def tab_hot(request: Request, themes: int = 1, refresh: int = 0,
+                  uid: str = Depends(get_current_user)):
+    ctx = _shell_ctx(uid, active="hot")
+    ctx.update(hot_svc.get_context(include_themes=bool(themes), refresh=bool(refresh)))
+    return templates.TemplateResponse(request, "hot.html", ctx)
+
+
+@app.post("/t/hot/explain", response_class=HTMLResponse)
+async def tab_hot_explain(request: Request, ticker: str = Form(...), themes: int = Form(1),
+                          uid: str = Depends(get_current_user)):
+    ctx = hot_svc.explain(include_themes=bool(themes), ticker=ticker)
+    return templates.TemplateResponse(request, "_hot_explain.html", ctx)
+
+
+@app.post("/t/hot/score", response_class=HTMLResponse)
+async def tab_hot_score(request: Request, query: str = Form(""),
+                        uid: str = Depends(get_current_user)):
+    ctx = hot_svc.score(query)
+    return templates.TemplateResponse(request, "_hot_score.html", ctx)
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──
