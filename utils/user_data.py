@@ -7,7 +7,17 @@
 """
 import os
 import shutil
+from contextvars import ContextVar
 from typing import List
+
+# FastAPI(web/)용 요청별 사용자 컨텍스트. Streamlit엔 st.session_state가 있고
+# cron엔 STOCK_AGENT_USER가 있으므로, 이건 FastAPI 경로에서만 세팅된다.
+_current_user_ctx: ContextVar[str | None] = ContextVar("current_user", default=None)
+
+
+def set_current_user(uid: str | None) -> None:
+    """FastAPI 요청 진입 시 사용자 ID 바인딩 (web/deps.get_current_user에서 호출)."""
+    _current_user_ctx.set(uid)
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DATA_DIR = os.path.join(_BASE_DIR, "data")
@@ -27,9 +37,12 @@ PRIVATE_FILES = [
 
 def current_user() -> str:
     """현재 로그인한 사용자 ID.
-    우선순위: streamlit 세션 > 환경변수 STOCK_AGENT_USER > 'default'.
+    우선순위: FastAPI 요청 컨텍스트 > streamlit 세션 > 환경변수 STOCK_AGENT_USER > 'default'.
     (cron/스크립트는 세션이 없으므로 STOCK_AGENT_USER로 대상 사용자 지정)
     """
+    ctx_uid = _current_user_ctx.get()
+    if ctx_uid:
+        return ctx_uid
     try:
         import streamlit as st
         uid = st.session_state.get("user_id")

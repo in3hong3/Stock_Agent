@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Stock Agent Terminal{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="title"><a href="/" style="text-decoration:none;">📊 Stock Agent Terminal</a></div>
+  <div class="user">👤 <b>{{ user_id }}</b>님 로그인 중 <a href="/logout">로그아웃</a></div>
+</div>
+
+<div class="ti-grid">
+  {% for c in ticker_cards %}
+  <div class="ti-card">
+    <div class="ti-label">{{ c.label }}</div>
+    <div class="ti-price">{{ c.price }}</div>
+    <div class="ti-change c-{{ c.color }}">{{ c.sub }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="fg-wrap">
+  <div class="fg-head">
+    <span>🌋 시장 심리</span>
+    {% if fg.value is not none %}
+      <span style="color: {{ fg.bar_color }}; font-weight: 700;">
+        {{ '%.0f'|format(fg.value) }}
+        <span style="color: var(--muted); font-weight: 400; font-size: 0.8rem;">{{ fg.status }}</span>
+      </span>
+    {% else %}
+      <span style="color: var(--muted);">데이터 없음</span>
+    {% endif %}
+  </div>
+  <div class="fg-track">
+    {% if fg.value is not none %}<div class="fg-marker" style="left: {{ fg.value }}%;"></div>{% endif %}
+  </div>
+  <div class="fg-scale"><span>공포</span><span>중립</span><span>탐욕</span></div>
+</div>
+
+<div class="tabnav">
+  {% for key, label in tabs %}
+  <a href="/t/{{ key }}" class="{{ 'active' if key == active_tab else '' }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<div class="content">{% block content %}{% endblock %}</div>
+{% endblock %}

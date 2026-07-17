@@ -1,0 +1,18 @@
+{% if status_msg %}
+<div class="toast">📰 {{ status_msg }}</div>
+{% endif %}
+{% if paper_front_html %}
+<div class="paper-meta">
+  📅 {{ today_dot }} 발행 {{ paper_time }} · AI 편집 ·
+  <span style="color: var(--point);">오늘 종일 유지됩니다</span>
+</div>
+<div class="paper-front">{{ paper_front_html|safe }}</div>
+{% else %}
+<div class="placeholder">
+  <div style="font-size: 40px;">🗞️</div>
+  <div style="margin-top: 10px;">
+    위의 <b>‘오늘의 신문 발행’</b> 버튼을 누르면<br>
+    보유 종목 뉴스 + SEC 공시 + 매크로를 종합한<br>오늘의 1면이 발행됩니다.
+  </div>
+</div>
+{% endif %}

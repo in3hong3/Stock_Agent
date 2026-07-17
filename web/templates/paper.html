@@ -1,0 +1,71 @@
+{% extends "shell.html" %}
+{% block content %}
+<div class="paper-masthead">
+  <div class="paper-title">株式日報</div>
+  <div class="paper-sub">STOCK AGENT DAILY · {{ date_str }} ({{ weekday }}) · 나만의 투자 신문</div>
+</div>
+
+<button class="btn-primary" style="width:100%;"
+        hx-post="/t/paper/publish" hx-target="#paper-body" hx-swap="innerHTML"
+        hx-disabled-elt="this" hx-indicator="#pub-ind">
+  🗞️ 오늘의 신문 발행 / 새 소식 반영
+</button>
+<div id="pub-ind" class="htmx-indicator" style="text-align:center; padding:10px; color:var(--muted);">
+  ✍️ AI 편집장이 1면 작성 중… (매크로·뉴스·공시 종합, 30~60초)
+</div>
+
+<div class="paper-cols">
+  {# 좌: 시세판 #}
+  <div class="paper-quotes">
+    <h5>📊 시세판</h5>
+    {% for m in macro %}
+    <div class="quote-row">
+      <span>{{ m.name }}</span>
+      <span><b>{{ m.value_str }}</b>
+        <span class="{{ 'c-up' if m.change_pct >= 0 else 'c-down' }}">{{ '%+.2f'|format(m.change_pct) }}%</span>
+      </span>
+    </div>
+    {% endfor %}
+    {% if not macro %}<div class="muted-sm">시세 데이터 없음</div>{% endif %}
+  </div>
+
+  {# 중: 1면 기사 #}
+  <div id="paper-body" class="paper-body">
+    {% include "_paper_body.html" %}
+  </div>
+
+  {# 우: 이번 주 일정 #}
+  <div class="paper-events">
+    <h5>📅 이번 주 일정</h5>
+    {% for ev in upcoming %}
+    <div class="event-row">
+      <b style="color: var(--point);">{{ 'D-' ~ ev.d_day if ev.d_day > 0 else '오늘' }}</b>
+      {{ ev.title }}
+    </div>
+    {% endfor %}
+    {% if not upcoming %}<div class="muted-sm">이번 주 일정 없음</div>{% endif %}
+  </div>
+</div>
+
+{# 종목별 상세 뉴스 #}
+<h5 style="margin-top:24px;">📰 종목별 상세 뉴스 (구글 뉴스)</h5>
+{% if news %}
+<div class="news-grid">
+  {% for ticker, items in news.items() %}
+  <details class="news-card">
+    <summary><b>{{ ticker }}</b> ({{ items|length }}건)</summary>
+    {% for n in items %}
+    <div class="news-item">
+      <a href="{{ n.link }}" target="_blank" rel="noopener">{{ n.title }}</a>
+      <div class="muted-sm">{{ n.publisher }} · {{ n.published }}</div>
+    </div>
+    {% endfor %}
+  </details>
+  {% endfor %}
+</div>
+{% else %}
+<div class="muted-sm">
+  {% if has_tickers %}뉴스를 불러오지 못했습니다.{% else %}포트폴리오에 종목이 없습니다. ‘내 포트폴리오’에서 추가하세요.{% endif %}
+</div>
+{% endif %}
+{% endblock %}

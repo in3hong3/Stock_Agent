@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  # .env의 실제 계정·API 키를 uvicorn 프로세스에도 로드 (Streamlit config.settings와 동일)
 
-from fastapi import FastAPI, Request, Form
+from fastapi import Depends, FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,8 +21,8 @@ from web.auth import (
     AUTH_COOKIE, COOKIE_MAX_AGE, COOKIE_SECURE,
     verify_login, make_cookie_value,
 )
-from web.deps import optional_user
-from web.services import market
+from web.deps import get_current_user, optional_user
+from web.services import market, paper as paper_svc
 
 _BASE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE / "templates"))
@@ -78,18 +78,55 @@ async def logout():
     return resp
 
 
+def _shell_ctx(uid: str, active: str | None = None) -> dict:
+    """모든 탭 페이지 공통 셸 컨텍스트 (상단바·티커테이프·F&G·탭내비)."""
+    return {
+        "user_id": uid,
+        "tabs": TABS,
+        "active_tab": active,
+        "ticker_cards": market.get_ticker_tape(),
+        "fg": market.get_fear_greed(),
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     uid = optional_user(request)
     if not uid:
         return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "dashboard.html", _shell_ctx(uid))
+
+
+# ── 데일리 신문 탭 (Phase 1 파일럿) ──
+@app.get("/t/paper", response_class=HTMLResponse)
+async def tab_paper(request: Request, uid: str = Depends(get_current_user)):
+    ctx = _shell_ctx(uid, active="paper")
+    ctx.update(paper_svc.get_context())
+    return templates.TemplateResponse(request, "paper.html", ctx)
+
+
+@app.post("/t/paper/publish", response_class=HTMLResponse)
+async def tab_paper_publish(request: Request, uid: str = Depends(get_current_user)):
+    """발행 버튼 — 1면 본문 fragment만 반환 (HTMX가 #paper-body에 스왑)."""
+    result = paper_svc.publish()
     ctx = {
-        "user_id": uid,
-        "tabs": TABS,
-        "ticker_cards": market.get_ticker_tape(),
-        "fg": market.get_fear_greed(),
+        "paper_front_html": result["front_html"],
+        "paper_time": result["time"],
+        "today_dot": result["today_dot"],
+        "status_msg": result["status_msg"],
     }
-    return templates.TemplateResponse(request, "dashboard.html", ctx)
+    return templates.TemplateResponse(request, "_paper_body.html", ctx)
+
+
+# ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──
+@app.get("/t/{tab_key}", response_class=HTMLResponse)
+async def tab_placeholder(request: Request, tab_key: str, uid: str = Depends(get_current_user)):
+    label = dict(TABS).get(tab_key)
+    if not label:
+        return PlainTextResponse("Not Found", status_code=404)
+    ctx = _shell_ctx(uid, active=tab_key)
+    ctx["tab_label"] = label
+    return templates.TemplateResponse(request, "tab_todo.html", ctx)
 
 
 @app.get("/healthz")

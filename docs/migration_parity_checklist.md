@@ -29,8 +29,8 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 
 ### 레이아웃 / 셸 (app.py)
 - [ ] 상단 고정 공지바(`top-announcement-bar`) — F&G 색상 연동
-- [ ] 티커테이프(`render_ticker_tape`) — F&G·다우·S&P·나스닥100·코스피·USD/KRW·BTC 7종, 한국식 색상(빨강↑/파랑↓), 반응형(900px→4열, 560px→2열)
-- [ ] 페이지 타이틀 "📊 Stock Agent Terminal"
+- [x] 티커테이프(`render_ticker_tape`) — F&G·다우·S&P·나스닥100·코스피·USD/KRW·BTC 7종, 한국식 색상(빨강↑/파랑↓), 반응형(900px→4열, 560px→2열) → 대체: `web/services/market.get_ticker_tape` + 템플릿
+- [x] 페이지 타이틀 "📊 Stock Agent Terminal"
 - [ ] 본문 7:3 컬럼 (좌 메인 탭 / 우 사이드패널)
 - [ ] 탭 10개(admin이면 11개) + 분석관 내부 서브탭 5개
 - [ ] 로딩 인디케이터(`stStatusWidget`) 커스텀 "로딩 중..." — FastAPI에선 HTMX 인디케이터로 대체
@@ -39,18 +39,18 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 - [ ] Fear&Greed 지수 캐시 로드(`get_cached_fear_greed_index`)
 
 ### 인증 (components.py) — 🔑
-- [ ] 로그인 페이지(다크 카드 UI, Pretendard 폰트) — id/pw
-- [ ] 계정: env `APP_USERNAME`/`APP_PASSWORD`(admin) + `APP_PASSWORD_SONG`(song) — **다계정**
-- [ ] 서명 토큰(`_auth_token`, sha256) — **FastAPI 재사용 가능**
-- [ ] 로그인 쿠키 `sa_auth` 30일 유지(`set_login_cookie`) — **HTTPS 시 Secure 플래그**
-- [ ] 새로고침 시 쿠키로 세션 복원(`try_restore_session`)
+- [x] 로그인 페이지(다크 카드 UI, Pretendard 폰트) — id/pw → `web/templates/login.html`
+- [x] 계정: env `APP_USERNAME`/`APP_PASSWORD`(admin) + `APP_PASSWORD_SONG`(song) — **다계정** → `web/auth.accounts`
+- [x] 서명 토큰(`_auth_token`, sha256) — **동일 스킴 재사용, 쿠키 공유** → `web/auth.auth_token`
+- [x] 로그인 쿠키 `sa_auth` 30일 유지(`set_login_cookie`) — Secure는 env `WEB_COOKIE_SECURE`(HTTPS 후 1)
+- [x] 새로고침 시 쿠키로 세션 복원(`try_restore_session`) → 서버 쿠키 검증(`user_from_cookie`)
 - [ ] 로그아웃(사이드바) — 계정별 캐시/상태 전부 클리어 + 쿠키 제거
 - [ ] 최초 로그인 시 legacy→user 데이터 마이그레이션(`migrate_legacy_to_user`) (1회성, 이전 후엔 불필요할 수도)
 - [ ] admin 계정만 관리자 탭 노출
 
 ### 사이드 패널 (sidebar.py) — 항상 우측 표시
 - [ ] 현재 사용자 표시 + 로그아웃 버튼
-- [ ] 🌋 시장 심리 컴팩트 막대(`render_fear_greed_bar`)
+- [x] 🌋 시장 심리 컴팩트 막대(`render_fear_greed_bar`) → 대시보드 상단 F&G 바(`market.get_fear_greed`) *(사이드바 위치는 Phase 4에서 조정)*
 - [ ] 📅 다가오는 일정 (21일 이내, 최대 8개) — `get_upcoming_events`
 - [ ] 🗓️ 월별 달력 expander — 이전/다음 달 네비, `build_calendar_html` ⏱️(21600s)
 - [ ] 📝 일정 직접 추가/삭제 폼 — `add_custom_event`/`remove_custom_event` 🟢
@@ -65,18 +65,20 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 
 ## Phase 1 — 읽기 전용 탭
 
-### 1. 🗞️ 데일리 (paper.py) 🔵
-- [ ] 신문 헤더 `株式日報` + 오늘 날짜(KST, `now_kst`)·요일
-- [ ] "🗞️ 오늘의 신문 발행/새 소식 반영" 버튼 💰 — 매크로+뉴스+SEC공시 종합, `publish_daily_paper`
-- [ ] 진행 배너(`ProgressBanner`) 5단계
-- [ ] 발행 상태별 토스트: unchanged(토큰절약)/updated(개정판)/발행, 엔진 라벨(웹검색🔍)
-- [ ] 저장된 신문 로드(`get_saved_paper`) — 없으면 첫 진입 시 **자동 발행 1회**(`_auto_paper_attempted`) 💰🔑
-- [ ] 📊 매크로 지표 상세 expander — `render_macro_grid`, 5열 그리드 + 미니 스파크라인(1개월) ⏱️(300s)
-- [ ] 3열 레이아웃: 좌(시세판) · 중(1면 기사) · 우(이번주 일정 D-day)
-- [ ] 1면 기사 렌더(`daily_paper["front"]`) + 발행시각 캡션
-- [ ] 종목별 상세 뉴스 2열 그리드 — 구글뉴스(`paper_news`) ⏱️(900s)
-- [ ] SEC 공시(`paper_filings`) ⏱️(3600s)
-- [ ] 데이터: `market_overview.get_macro_data`, `daily_paper.*`, `event_calendar.*`, `issue_tracker.get_portfolio_holdings`
+### 1. 🗞️ 데일리 (paper.py) 🔵 — ✅ 이전 완료 (web/services/paper.py, templates/paper.html)
+- [x] 신문 헤더 `株式日報` + 오늘 날짜(KST, `now_kst`)·요일
+- [x] "🗞️ 오늘의 신문 발행/새 소식 반영" 버튼 💰 — 매크로+뉴스+SEC공시 종합, `publish_daily_paper`
+- [x] 진행 배너(`ProgressBanner`) 5단계 → 대체: HTMX 인디케이터(hx-indicator, 발행 중 문구 1개). 세부 5단계는 웹에선 불필요로 판단
+- [x] 발행 상태별 토스트: unchanged/updated/발행, 엔진 라벨(웹검색🔍) → 발행 응답 상단 `.toast`
+- [x] 저장된 신문 로드(`get_saved_paper`) → GET 시 표시
+- [ ] ⚠️ 첫 진입 시 **자동 발행 1회**(`_auto_paper_attempted`) — 비용 유발이라 **의도적 보류**. 발행은 버튼으로만(자동 LLM 트리거 최소화, 사용자 비용 우려 반영). 재검토 필요
+- [ ] 📊 매크로 지표 상세 expander — `render_macro_grid`, 5열 그리드 + 미니 스파크라인 — **미이전**(스파크라인 차트는 후속. 시세판으로 핵심 수치는 커버)
+- [x] 3열 레이아웃: 좌(시세판) · 중(1면 기사) · 우(이번주 일정 D-day)
+- [x] 1면 기사 렌더(마크다운→HTML, `markdown` 라이브러리) + 발행시각 캡션
+- [x] 종목별 상세 뉴스 2열 그리드 — 구글뉴스(`paper_news`) ⏱️(900s) → `<details>` 카드 그리드
+- [x] SEC 공시(`paper_filings`) ⏱️(3600s) — 발행 입력으로 사용
+- [x] 데이터: `market_overview.get_macro_data`, `daily_paper.*`, `event_calendar.*`, `issue_tracker.get_portfolio_holdings`
+- 남은 것: 매크로 스파크라인 상세, 자동발행(보류). 그 외 기능 동등.
 
 ### 2. 🧠 AI 신호 (ml_signals.py) 🔵 — 표시 전용(서버 torch 금지)
 - [ ] 3개 서브탭: 데일리 판정 / 상승확률 / 패턴 감지
