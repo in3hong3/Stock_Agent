@@ -1,0 +1,115 @@
+:root {
+  --bg: #0E1117;
+  --card: #16181F;
+  --card2: #1A1C24;
+  --border: rgba(255,255,255,0.06);
+  --text: #E2E8F0;
+  --muted: #94A3B8;
+  --up: #FF4B4B;
+  --down: #4B7BFF;
+  --point: #00FFA3;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+
+/* ── 상단 바 ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+}
+.topbar .title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.topbar .user { font-size: 13px; color: var(--muted); }
+.topbar .user a {
+  margin-left: 12px; padding: 4px 12px; border-radius: 8px;
+  background: var(--card); border: 1px solid var(--border); text-decoration: none;
+  font-size: 12px;
+}
+
+/* ── 티커테이프 ── */
+.ti-grid {
+  display: grid; grid-template-columns: repeat(7, minmax(0,1fr));
+  gap: 8px; padding: 12px 20px;
+}
+.ti-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; min-width: 0;
+}
+.ti-label { font-size: 11px; color: var(--muted); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.ti-price { font-size: 18px; font-weight: 600; color: var(--text);
+  margin: 4px 0 2px; line-height: 1.2; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.ti-change { font-size: 11px; line-height: 1.3; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.c-up { color: var(--up); }
+.c-down { color: var(--down); }
+.c-flat, .c-muted { color: var(--muted); }
+@media (max-width: 900px) { .ti-grid { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+@media (max-width: 560px) { .ti-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+/* ── F&G 바 ── */
+.fg-wrap { padding: 4px 20px 12px; }
+.fg-head { display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px; font-size: 0.9rem; }
+.fg-track { position: relative; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg,#FF4B4B,#FFA500,#FFD700,#90EE90,#00FFA3); }
+.fg-marker { position: absolute; top: -3px; width: 3px; height: 14px;
+  background: #fff; border-radius: 2px; transform: translateX(-50%);
+  box-shadow: 0 0 4px rgba(0,0,0,0.6); }
+.fg-scale { display: flex; justify-content: space-between; font-size: 0.62rem;
+  color: #5F5E5A; margin-top: 3px; }
+
+/* ── 탭 내비 ── */
+.tabnav { display: flex; gap: 4px; padding: 0 20px; overflow-x: auto;
+  border-bottom: 1px solid var(--border); }
+.tabnav a {
+  padding: 10px 14px; font-size: 14px; font-weight: 600; color: var(--muted);
+  text-decoration: none; white-space: nowrap; border-bottom: 3px solid transparent;
+}
+.tabnav a.active { color: var(--point); border-bottom-color: var(--point); }
+.tabnav a:hover { color: var(--text); }
+
+/* ── 본문 ── */
+.content { padding: 24px 20px; max-width: 1100px; }
+.placeholder {
+  border: 1px dashed var(--border); border-radius: 14px; padding: 48px 24px;
+  text-align: center; color: var(--muted);
+}
+
+/* ── 로그인 ── */
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card {
+  width: 360px; max-width: 90vw;
+  background: linear-gradient(170deg, #1A1C24 0%, #14161D 100%);
+  padding: 36px 32px; border-radius: 20px; border: 1px solid var(--border);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+.login-logo { text-align: center; font-size: 44px; }
+.login-title {
+  font-size: 26px; font-weight: 800; text-align: center; margin: 4px 0 6px;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #FFFFFF 40%, #00FFA3);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.login-sub { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 24px; }
+.login-card input {
+  width: 100%; height: 46px; margin-bottom: 12px; padding: 0 14px;
+  border-radius: 12px; background: var(--bg); color: #fff;
+  border: 1px solid rgba(255,255,255,0.1); font-size: 14px;
+}
+.login-card input:focus { outline: none; border-color: var(--point); }
+.login-card button {
+  width: 100%; height: 46px; border: none; border-radius: 12px; cursor: pointer;
+  font-weight: 700; font-size: 15px; margin-top: 6px; color: #0E1117;
+  background: linear-gradient(90deg, #00FFA3, #00D9F5);
+}
+.login-card button:hover { filter: brightness(1.08); }
+.login-err { color: var(--up); font-size: 13px; text-align: center; margin-bottom: 10px; }
+.login-foot { text-align: center; margin-top: 18px; color: #475569; font-size: 11px; }

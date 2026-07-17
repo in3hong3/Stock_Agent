@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}로그인 · Stock Agent{% endblock %}
+{% block body %}
+<div class="login-wrap">
+  <form class="login-card" method="post" action="/login">
+    <div class="login-logo">📊</div>
+    <div class="login-title">Stock Agent Terminal</div>
+    <div class="login-sub">전문 투자 분석을 위한 멀티 에이전트 시스템</div>
+    {% if error %}<div class="login-err">{{ error }}</div>{% endif %}
+    <input type="text" name="username" placeholder="아이디를 입력하세요" autofocus>
+    <input type="password" name="password" placeholder="비밀번호를 입력하세요">
+    <button type="submit">Sign In</button>
+    <div class="login-foot">© 2026 Stock Agent Terminal. All rights reserved.</div>
+  </form>
+</div>
+{% endblock %}

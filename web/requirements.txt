@@ -1,0 +1,6 @@
+# FastAPI 이전(web/) 전용 의존성 — 기존 Streamlit requirements.txt와 분리.
+# 설치: .venv/Scripts/python -m pip install -r web/requirements.txt
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart

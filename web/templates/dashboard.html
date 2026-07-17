@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Stock Agent Terminal{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="title">📊 Stock Agent Terminal</div>
+  <div class="user">👤 <b>{{ user_id }}</b>님 로그인 중 <a href="/logout">로그아웃</a></div>
+</div>
+
+{# ── 티커테이프 ── #}
+<div class="ti-grid">
+  {% for c in ticker_cards %}
+  <div class="ti-card">
+    <div class="ti-label">{{ c.label }}</div>
+    <div class="ti-price">{{ c.price }}</div>
+    <div class="ti-change c-{{ c.color }}">{{ c.sub }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── F&G 바 ── #}
+<div class="fg-wrap">
+  <div class="fg-head">
+    <span>🌋 시장 심리</span>
+    {% if fg.value is not none %}
+      <span style="color: {{ fg.bar_color }}; font-weight: 700;">
+        {{ '%.0f'|format(fg.value) }}
+        <span style="color: var(--muted); font-weight: 400; font-size: 0.8rem;">{{ fg.status }}</span>
+      </span>
+    {% else %}
+      <span style="color: var(--muted);">데이터 없음</span>
+    {% endif %}
+  </div>
+  <div class="fg-track">
+    {% if fg.value is not none %}
+    <div class="fg-marker" style="left: {{ fg.value }}%;"></div>
+    {% endif %}
+  </div>
+  <div class="fg-scale"><span>공포</span><span>중립</span><span>탐욕</span></div>
+</div>
+
+{# ── 탭 내비 (Phase 1부터 각 탭 라우트로 연결) ── #}
+<div class="tabnav">
+  {% for key, label in tabs %}
+  <a href="/t/{{ key }}" class="{{ 'active' if loop.first else '' }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<div class="content">
+  <div class="placeholder">
+    <div style="font-size: 40px;">🚧</div>
+    <div style="margin-top: 12px;">
+      Phase 0 — 뼈대 완성. 로그인·티커테이프·시장심리·탭 내비가 동작합니다.<br>
+      각 탭 내용은 Phase 1(읽기 전용)부터 순서대로 이전됩니다.
+    </div>
+  </div>
+</div>
+{% endblock %}
