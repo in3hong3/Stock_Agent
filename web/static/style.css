@@ -267,3 +267,8 @@ h5 { margin: 6px 0; font-size: 0.95rem; }
   border-left: 3px solid #a855f7; border-radius: 4px; font-size: 0.78rem; }
 .chk-group { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 6px 0; }
 .chk-group label { font-size: 0.85rem; color: var(--text); cursor: pointer; }
+
+/* ── 포트폴리오 편집 표 ── */
+.pf-table input { height: 32px; padding: 0 8px; border-radius: 6px; background: var(--bg);
+  color: var(--text); border: 1px solid var(--border); font-size: 0.85rem; }
+.pf-table td { vertical-align: middle; }

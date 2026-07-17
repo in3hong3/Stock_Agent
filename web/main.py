@@ -27,6 +27,7 @@ from urllib.parse import quote
 from web.services import (
     market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
     backtest as bt_svc, journal as journal_svc, alerts as alerts_svc, tracker as tracker_svc,
+    portfolio as pf_svc,
 )
 
 _BASE = Path(__file__).resolve().parent
@@ -312,6 +313,72 @@ async def tab_tracker_eval(request: Request, stance: str = Form("aggressive"),
                            force: str = Form("0"), uid: str = Depends(get_current_user)):
     return templates.TemplateResponse(request, "_tracker_eval.html",
                                       tracker_svc.ai_eval(stance, force == "1"))
+
+
+# ── 포트폴리오 탭 (핵심 관리, PRG) ──
+def _redir_pf(flash: str) -> RedirectResponse:
+    return RedirectResponse(f"/t/portfolio?flash={quote(flash)}", status_code=303)
+
+
+@app.get("/t/portfolio", response_class=HTMLResponse)
+async def tab_portfolio(request: Request, flash: str = "", uid: str = Depends(get_current_user)):
+    ctx = _shell_ctx(uid, active="portfolio")
+    ctx.update(pf_svc.get_context())
+    ctx["flash"] = flash
+    return templates.TemplateResponse(request, "portfolio.html", ctx)
+
+
+@app.post("/t/portfolio/sample")
+async def pf_sample(request: Request, uid: str = Depends(get_current_user)):
+    return _redir_pf(pf_svc.create_sample())
+
+
+@app.post("/t/portfolio/add")
+async def pf_add(request: Request, name: str = Form(""), qty: str = Form(""), avg: str = Form(""),
+                 uid: str = Depends(get_current_user)):
+    return _redir_pf(pf_svc.add_holding(name, qty, avg))
+
+
+@app.post("/t/portfolio/save")
+async def pf_save(request: Request, uid: str = Depends(get_current_user)):
+    form = await request.form()
+    flash = pf_svc.save_edits(form.getlist("ticker"), form.getlist("name"),
+                              form.getlist("quantity"), form.getlist("avg_price"))
+    return _redir_pf(flash)
+
+
+@app.post("/t/portfolio/delete")
+async def pf_delete(request: Request, uid: str = Depends(get_current_user)):
+    form = await request.form()
+    return _redir_pf(pf_svc.delete_holdings(form.getlist("tickers")))
+
+
+@app.post("/t/portfolio/update-prices")
+async def pf_update_prices(request: Request, uid: str = Depends(get_current_user)):
+    return _redir_pf(pf_svc.update_prices())
+
+
+@app.post("/t/portfolio/cash")
+async def pf_cash(request: Request, krw: str = Form("0"), usd: str = Form("0"),
+                  uid: str = Depends(get_current_user)):
+    return _redir_pf(pf_svc.save_cash(krw, usd))
+
+
+@app.post("/t/portfolio/seed")
+async def pf_seed(request: Request, seed: str = Form("0"), risk: str = Form("1.0"),
+                  uid: str = Depends(get_current_user)):
+    return _redir_pf(pf_svc.save_seed(seed, risk))
+
+
+@app.post("/t/portfolio/record-sells")
+async def pf_record_sells(request: Request, action: str = Form("record"),
+                          uid: str = Depends(get_current_user)):
+    if action == "skip":
+        return _redir_pf(pf_svc.skip_sells())
+    form = await request.form()
+    prices = {k[len("price_"):]: float(v) for k, v in form.items()
+              if k.startswith("price_") and v}
+    return _redir_pf(pf_svc.record_sells(prices))
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──

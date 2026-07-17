@@ -1,0 +1,117 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>💼 내 포트폴리오 — {{ user_id }}</h3>
+<div class="muted-sm">개인 보유 종목 — 로그인한 계정별로 따로 저장됩니다.</div>
+
+{% if flash %}<div class="toast" style="margin-top:10px;">{{ flash }}</div>{% endif %}
+
+{% if not has_file %}
+<div class="muted-sm" style="margin-top:16px;">📁 아직 포트폴리오가 비어있습니다.</div>
+<form method="post" action="/t/portfolio/sample" style="margin-top:8px;">
+  <button class="btn-primary" type="submit">📁 샘플 파일 생성</button>
+</form>
+{% else %}
+
+{# 총자산 #}
+{% set t = totals %}
+<div class="metric-row">
+  <div class="metric"><div class="m-label">💰 총 자산 (주식+현금)</div><div class="m-val">₩{{ t.total|num('{:,.0f}') }}</div><div class="muted-sm">${{ t.usd_total|num('{:,.0f}') }}</div></div>
+  <div class="metric"><div class="m-label">📈 주식 평가액</div><div class="m-val">₩{{ t.stock_eval|num('{:,.0f}') }}</div><div class="muted-sm {{ 'c-up' if t.pnl_rate >= 0 else 'c-down' }}">손익 {{ t.pnl_rate|num('{:+.2f}') }}%</div></div>
+  <div class="metric"><div class="m-label">💵 현금</div><div class="m-val">₩{{ t.cash_total|num('{:,.0f}') }}</div><div class="muted-sm">비중 {{ t.cash_ratio|num('{:.1f}') }}%</div></div>
+  <div class="metric"><div class="m-label">총 매입액</div><div class="m-val">₩{{ t.total_cost|num('{:,.0f}') }}</div></div>
+</div>
+<div class="muted-sm">환율 $1 = ₩{{ fx|num('{:,.1f}') }} · 현재가 기준: {{ price_ts }}{% if missing %} · ⚠️ 현재가 비어있는 종목 {{ missing }}개 (아래 '가격 업데이트'){% endif %}</div>
+
+{# 매도 감지 → 매매일지 유도 #}
+{% if pending_sells %}
+<div class="toast" style="color:#FFC94B; border-color:#FFA50055; margin-top:10px;">📉 매도(수량 감소)가 감지됐어요. 체결가를 넣고 기록하면 실현손익에 반영됩니다.</div>
+<form method="post" action="/t/portfolio/record-sells" class="news-card">
+  {% for s in pending_sells %}
+  <div class="alert-row">
+    <span><b>{{ s.name }} ({{ s.ticker }})</b> — {{ s.qty|num('{:,.0f}') }}주 매도 · 평단 {{ s.avg_price|num('{:,.2f}') }}</span>
+    <input type="number" name="price_{{ s.ticker }}" step="0.01" value="{{ (s.current_price if s.current_price > 0 else s.avg_price)|num('{:.2f}') }}" style="width:120px;">
+  </div>
+  {% endfor %}
+  <div style="display:flex; gap:8px; margin-top:8px;">
+    <button class="btn-primary" type="submit" name="action" value="record">📒 매매일지에 기록</button>
+    <button class="btn-ghost" type="submit" name="action" value="skip">건너뛰기</button>
+  </div>
+</form>
+{% endif %}
+
+{# 종목 추가 #}
+<hr class="sep">
+<h4>➕ 종목 추가</h4>
+<form class="inline-form" method="post" action="/t/portfolio/add">
+  <input type="text" name="name" placeholder="종목 (엔비디아 / NVDA / 005930)" style="flex:2;">
+  <input type="text" name="qty" placeholder="수량 (비우면 1)" style="width:120px;">
+  <input type="text" name="avg" placeholder="평단가 (비우면 현재가)" style="width:150px;">
+  <button class="btn-ghost" type="submit">➕ 추가</button>
+</form>
+<div class="muted-sm">티커/종목명·현재가는 자동 조회됩니다. 금액: 미국주 $ / 한국주(.KS) ₩ 기준.</div>
+
+{# 보유 종목 편집 #}
+<hr class="sep">
+<h4>📊 보유 종목 (수량·평단 수정 후 저장)</h4>
+<form method="post" action="/t/portfolio/save">
+  <div class="table-scroll"><table class="rank-table pf-table">
+    <thead><tr><th>✏️ 티커</th><th>✏️ 종목명</th><th>✏️ 수량</th><th>✏️ 평단가</th><th>🔒 현재가</th><th>🔒 평가금액</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><input type="text" name="ticker" value="{{ r.ticker }}" style="width:90px;"></td>
+        <td><input type="text" name="name" value="{{ r.name }}" style="width:120px;"></td>
+        <td><input type="number" name="quantity" value="{{ r.quantity }}" step="any" style="width:90px;"></td>
+        <td><input type="number" name="avg_price" value="{{ r.avg_price }}" step="any" style="width:100px;"></td>
+        <td>{{ r.current_price|num('{:,.2f}') }}</td>
+        <td>{{ r.eval|num('{:,.2f}') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  <button class="btn-primary" type="submit" style="margin-top:8px;">💾 변경사항 저장</button>
+</form>
+
+{# 삭제 #}
+<details class="news-card" style="margin-top:10px;">
+  <summary>🗑️ 종목 삭제</summary>
+  <form method="post" action="/t/portfolio/delete" onsubmit="return confirm('선택 종목을 삭제할까요?')">
+    <div class="chk-group">
+      {% for r in rows %}<label><input type="checkbox" name="tickers" value="{{ r.ticker }}"> {{ r.name }} ({{ r.ticker }})</label>{% endfor %}
+    </div>
+    <button class="btn-ghost btn-sm" type="submit" style="border-color:#FF4B4B55; color:#FF6B6B; margin-top:6px;">🗑️ 선택 종목 삭제</button>
+  </form>
+</details>
+
+{# 가격 업데이트 #}
+<form method="post" action="/t/portfolio/update-prices" style="margin-top:10px;">
+  <button class="btn-ghost" type="submit">📡 가격 업데이트</button>
+</form>
+
+{# 현금 / 시드 #}
+<hr class="sep">
+<div class="paper-cols" style="grid-template-columns:1fr 1fr;">
+  <form method="post" action="/t/portfolio/cash">
+    <h4>💵 보유 현금</h4>
+    <div class="inline-form">
+      <input type="text" name="krw" value="{{ cash.krw|num('{:.0f}') }}" placeholder="원화 ₩" style="width:130px;">
+      <input type="text" name="usd" value="{{ cash.usd|num('{:.2f}') }}" placeholder="달러 $" style="width:130px;">
+      <button class="btn-ghost" type="submit">💾 저장</button>
+    </div>
+  </form>
+  <form method="post" action="/t/portfolio/seed">
+    <h4>💰 트레이딩 시드 / 리스크</h4>
+    <div class="inline-form">
+      <input type="text" name="seed" value="{{ seed|num('{:.0f}') }}" placeholder="시드 $" style="width:130px;">
+      <input type="text" name="risk" value="{{ risk }}" placeholder="리스크 %" style="width:100px;">
+      <button class="btn-ghost" type="submit">💾 저장</button>
+    </div>
+    <div class="muted-sm">미너비니식 포지션 사이징에 사용 (기본 1% 룰).</div>
+  </form>
+</div>
+
+<div class="muted-sm" style="margin-top:16px; padding-top:10px; border-top:1px solid var(--border);">
+  ℹ️ 분석 서브탭(📋 종목상세 · 📊 시각화 · 🔔 알림 · ⚖️ 리밸런싱 · 💬 개인화 챗봇)과 현금기준 실행지시는 후속 이전 예정입니다.
+</div>
+{% endif %}
+{% endblock %}

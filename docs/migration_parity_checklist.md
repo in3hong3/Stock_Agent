@@ -156,25 +156,19 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 - 검증: 합성 데이터로 전 섹션(시그널카드·계단식청산·포지션사이징·집단지성·평가폼) 렌더 통과 + 빈 상태 live GET
 - **보류 3건**: 진입시 자동가격채움 / 캔들차트 토글(plotly) / 시그널 정확도 셋업별 상세표
 
-### 9. 💼 포트폴리오 (portfolio.py) 🟢 — 가장 큼, 5개 서브탭
-- [ ] 헤더에 현재 사용자명(`current_user()`) — **contextvars 추상화 핵심**
-- [ ] 빈 포트폴리오 시 샘플 파일 생성 버튼
-- [ ] ➕ 종목 일괄 추가 — data_editor(종목/수량/평단), `resolve_ticker`+yfinance 자동조회, 중복체크 🟢
-- [ ] 메인 편집 표(data_editor) — 티커/종목명/수량/평단 직접입력, 현재가/평가금액 자동, 빈행 제거
-- [ ] 💾 변경사항 저장 — unsaved 감지, 매도(수량감소/삭제) 감지 → `_pending_sells` 🔑
-- [ ] 🗑️ 종목 삭제 expander — multiselect + 삭제, 전량매도 처리
-- [ ] 📒 매도 감지 → 매매일지 기록 유도 폼(체결가 입력) / 건너뛰기
-- [ ] 총자산 메트릭 4개(총자산/주식평가/현금/총매입) — FX 환산 ⏱️(600s), 빈가격 경고
-- [ ] 💰 트레이딩 시드/리스크 설정 폼 — `save_meta(trading_seed, risk_pct)` 🟢
-- [ ] 💵 보유 현금 입력 폼(원화/달러) — `save_meta(cash_krw, cash_usd)` 🟢
-- [ ] 💵 현금 기준 실행 지시 — 투입비율 슬라이더, `build_action_plan`, 팔것/살것 목록 ⏱️(300s)
-- [ ] 📡 가격 업데이트 버튼 — `PriceUpdater.update_portfolio_prices` 🟢
-- [ ] 🚀 분석 실행 버튼 — `PortfolioAnalyzer` 💰 🔑
-- [ ] 서브탭1 📋 종목상세 — 분석결과 메트릭 + 종목별 AI피드백 + RAG 관련영상
-- [ ] 서브탭2 📊 시각화 — 섹터 파이/수익 바/트리맵/선버스트/섹터성과 (Plotly)
-- [ ] 서브탭3 🔔 알림 — `PortfolioAlert` 💰
-- [ ] 서브탭4 ⚖️ 리밸런싱 — `PortfolioRebalancer`, 3탭(분석/효율적투자선/비용시뮬) 💰
-- [ ] 서브탭5 💬 개인화 챗봇 — `PersonalizedRAG`, 보유맥락, 관련종목·소스 💬💰 🔑
+### 9. 💼 포트폴리오 (portfolio.py) 🟢 — ✅ 핵심 관리 이전 완료 (web/services/portfolio.py, templates/portfolio.html)
+- [x] 헤더에 현재 사용자명(`current_user()`) — contextvar
+- [x] 빈 포트폴리오 시 샘플 파일 생성 버튼(PRG)
+- [x] ➕ 종목 추가 — `resolve_ticker`+yfinance 자동조회, 중복체크 → 대체: 단일 추가 폼(data_editor 다중행 대신)
+- [x] 메인 편집 표 — 티커/종목명/수량/평단 직접입력, 현재가/평가금액 자동 → 대체: **행별 input 폼 + 일괄 저장**(data_editor 대신, 웹 표준)
+- [x] 💾 변경사항 저장 — 매도(수량감소/삭제) 감지 → meta `_pending_sells`
+- [x] 🗑️ 종목 삭제 — 체크박스 + confirm, 전량매도 처리
+- [x] 📒 매도 감지 → 매매일지 기록 유도 폼(체결가 입력) / 건너뛰기 (검증: 실현손익 정확)
+- [x] 총자산 메트릭 4개 — FX 환산, 빈가격 경고
+- [x] 💰 트레이딩 시드/리스크 폼 · 💵 보유 현금 폼 — `save_meta`
+- [x] 📡 가격 업데이트 버튼 — `PriceUpdater`
+- 검증: **격리 유저로 샘플·편집·매도감지·매매일지연동(+360)·삭제·현금/시드·빈상태 전체 CRUD 통과**
+- **보류(후속 이전)**: 💵 현금기준 실행지시(`build_action_plan`) · 🚀 분석실행(`PortfolioAnalyzer` 💰) · 서브탭5개(📋종목상세 · 📊시각화 plotly · 🔔알림 💰 · ⚖️리밸런싱 💰 · 💬개인화챗봇 💰). 관리 핵심은 완료, 분석 레이어는 별도.
 
 ---
 
