@@ -1,0 +1,110 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>🔔 가격 알림</h3>
+<div class="muted-sm">조건 충족 시 이메일 + 카카오톡으로 알려드립니다. 서버 cron이 30분마다 자동 체크합니다.</div>
+
+{% if flash %}<div class="toast" style="margin-top:10px;">{{ flash }}</div>{% endif %}
+
+{# 채널 상태 #}
+<div class="paper-cols" style="grid-template-columns:1fr 1fr; margin-top:10px;">
+  <div>{{ '🟢' if email_ok else '⚪' }} <b>이메일</b> {{ '연결됨' if email_ok else '미설정' }}</div>
+  <div>{{ '🟢' if kakao_ok else '⚪' }} <b>카카오톡</b> {{ '연결됨' if kakao_ok else '미설정 (.env에 KAKAO 키 추가)' }}</div>
+</div>
+{% if not kakao_ok %}
+<details class="news-card" style="margin-top:8px;">
+  <summary>📱 카카오톡 알림 켜는 법</summary>
+  <div class="muted-sm" style="margin-top:6px;">
+    1. 카카오 디벨로퍼스에서 앱 생성 → REST API 키<br>
+    2. 카카오 로그인 활성화 + Redirect URI 등록 · 동의항목 'talk_message' 켜기<br>
+    3. 로컬에서 <code>python scripts/kakao_get_token.py</code> → 로그인/동의<br>
+    4. 출력된 키/토큰을 서버 <code>.env</code>에 추가 후 재시작
+  </div>
+</details>
+{% endif %}
+
+{# 📩 카카오 데일리 브리핑 토글 #}
+<hr class="sep">
+<div class="hot-controls">
+  <div><b>📩 카카오 데일리 브리핑</b> — 매일 아침(평일) 내 포트 일정 + 시황을 카카오톡으로</div>
+  <form method="post" action="/t/alerts/briefing-toggle" id="brief-form">
+    <label><input type="checkbox" name="on" value="1" {{ 'checked' if kakao_briefing_enabled else '' }}
+           onchange="document.getElementById('brief-form').submit()"> 받기</label>
+  </form>
+</div>
+{% if kakao_briefing_enabled and not kakao_ok %}
+<div class="toast" style="color:#FFC94B; border-color:#FFA50055;">⚠️ 받기는 켰지만 카카오톡이 아직 연결 안 됐어요. 위 안내로 토큰을 발급해 서버 .env에 추가해야 실제 전송됩니다.</div>
+{% elif kakao_briefing_enabled %}
+<div class="muted-sm">✅ 매일 아침 8시(평일)에 카카오톡으로 받습니다.</div>
+{% endif %}
+
+{# 🎯 관심종목 매수 타이밍 #}
+<hr class="sep">
+<h4>🎯 관심종목 매수 타이밍</h4>
+<div class="hot-controls">
+  <div class="muted-sm"><b>🔔 매수 타이밍 알림</b> — 비매수→매수로 새로 바뀔 때만 1회 (스팸 방지)</div>
+  <form method="post" action="/t/alerts/watchlist-toggle" id="wl-form">
+    <label><input type="checkbox" name="on" value="1" {{ 'checked' if watchlist_alert_enabled else '' }}
+           onchange="document.getElementById('wl-form').submit()"> 받기</label>
+  </form>
+</div>
+<form class="inline-form" method="post" action="/t/alerts/watchlist/add">
+  <input type="text" name="ticker" placeholder="티커 또는 한글명 (예: 팔란티어 / PLTR / 005930)" style="flex:1;">
+  <button class="btn-ghost" type="submit">➕ 관심추가</button>
+</form>
+{% if watchlist %}
+<div class="muted-sm">관심종목 {{ watchlist|length }}개 (보유종목은 자동으로 '추가매수' 타이밍 체크)</div>
+{% for it in watchlist %}
+<div class="alert-row">
+  <span>• <b>{{ it.name or it.ticker }}</b> ({{ it.ticker }})</span>
+  <form method="post" action="/t/alerts/watchlist/remove" style="margin:0;">
+    <input type="hidden" name="ticker" value="{{ it.ticker }}">
+    <button class="btn-ghost btn-sm" type="submit" title="삭제">🗑️</button>
+  </form>
+</div>
+{% endfor %}
+{% else %}
+<div class="muted-sm">관심종목이 없습니다. (보유종목은 자동으로 '추가매수' 타이밍을 체크합니다)</div>
+{% endif %}
+<button class="btn-primary" style="margin-top:8px;" hx-post="/t/alerts/buy-timings"
+        hx-target="#buy-out" hx-swap="innerHTML" hx-disabled-elt="this" hx-indicator="#buy-ind">🎯 지금 매수 타이밍 보기</button>
+<div id="buy-ind" class="htmx-indicator muted-sm" style="padding:6px;">관심+보유종목 분석 중…</div>
+<div id="buy-out"></div>
+
+{# 📍 수동 가격/RSI 알림 #}
+<hr class="sep">
+<h4>📍 수동 가격/RSI 알림</h4>
+<form class="inline-form" method="post" action="/t/alerts/add">
+  <input type="text" name="ticker" value="NVDA" style="width:120px;">
+  <select name="condition">{% for c in condition_types %}<option value="{{ c.key }}">{{ c.label }}</option>{% endfor %}</select>
+  <input type="number" name="value" value="100" step="1" style="width:120px;">
+  <button class="btn-ghost" type="submit">➕ 추가</button>
+</form>
+
+<hr class="sep">
+<h4>📋 등록된 알림 ({{ alerts|length }}건)</h4>
+{% if not alerts %}
+<div class="muted-sm">등록된 알림이 없습니다. 위에서 추가하세요.</div>
+{% else %}
+{% for a in alerts %}
+<div class="alert-row">
+  <span>{{ '🟢' if a.enabled else '⚪' }} <b>{{ a.ticker }}</b> · {{ a.condition }} · 기준 <code>{{ a.value }}</code>
+    <span class="muted-sm">{{ ('발송: ' ~ a.last_triggered) if a.last_triggered else '대기 중' }}</span></span>
+  <span style="display:flex; gap:6px;">
+    {% if not a.enabled %}
+    <form method="post" action="/t/alerts/reenable" style="margin:0;"><input type="hidden" name="id" value="{{ a.id }}">
+      <button class="btn-ghost btn-sm" type="submit" title="재활성화">🔄</button></form>
+    {% endif %}
+    <form method="post" action="/t/alerts/remove" style="margin:0;"><input type="hidden" name="id" value="{{ a.id }}">
+      <button class="btn-ghost btn-sm" type="submit" title="삭제">🗑️</button></form>
+  </span>
+</div>
+{% endfor %}
+{% endif %}
+
+<hr class="sep">
+<button class="btn-primary" hx-post="/t/alerts/check" hx-target="#check-out" hx-swap="innerHTML"
+        hx-disabled-elt="this" hx-indicator="#check-ind"
+        hx-confirm="지금 조건을 체크하고, 충족되면 실제로 이메일/카카오를 발송합니다. 진행할까요?">📡 지금 바로 조건 체크 + 이메일 발송</button>
+<div id="check-ind" class="htmx-indicator muted-sm" style="padding:6px;">조건 체크 중…</div>
+<div id="check-out"></div>
+{% endblock %}

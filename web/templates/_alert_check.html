@@ -1,0 +1,8 @@
+{% if count > 0 %}
+<div class="toast" style="color:var(--point);">✅ {{ count }}건 조건 충족! 이메일 {{ '성공' if email_sent else '미발송' }} · 카카오톡 {{ '성공' if kakao_sent else '미발송' }}</div>
+{% for t in triggered %}
+<div class="muted-sm">• <b>{{ t.ticker }}</b>: 현재값 <code>{{ t.current_value }}</code> (기준 <code>{{ t.value }}</code>)</div>
+{% endfor %}
+{% else %}
+<div class="muted-sm">충족된 조건이 없습니다.</div>
+{% endif %}

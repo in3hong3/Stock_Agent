@@ -130,14 +130,15 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 - 검증: **격리 테스트 유저로 add(실현손익+100)·통계·삭제·입력검증 전체 CRUD 확인 후 정리**
 - 버그 수정: Jinja `format`(printf)이 천단위 콤마 미지원 → `num` 커스텀 필터 신설(전역)
 
-### 7. 🔔 가격알림 (alerts.py) 🟢
-- [ ] 알림 채널 상태: 이메일/카카오톡 연결 여부, 카카오 설정법 expander
-- [ ] 📩 카카오 데일리 브리핑 ON/OFF 토글 — `save_meta(kakao_briefing_enabled)` 🟢
-- [ ] 🎯 관심종목 매수 타이밍 섹션: 알림 토글, 관심종목 추가 폼(`add_to_watchlist`)/삭제, "지금 매수 타이밍 보기"(`detect_buy_timings`)
-- [ ] 📍 수동 가격/RSI 알림 추가 폼 — 티커·조건(`CONDITION_TYPES`)·기준값, `add_alert`
-- [ ] 등록된 알림 목록 — 상태아이콘·조건·기준·발송기록, 재활성화/삭제 버튼
-- [ ] "📡 지금 바로 조건 체크 + 이메일 발송" — `run_alert_check`, 이메일/카카오 결과
-- [ ] 데이터: `price_alert.*`, `watchlist.*`, `kakao_notify`, `_meta`
+### 7. 🔔 가격알림 (alerts.py) 🟢 — ✅ 이전 완료 (web/services/alerts.py, templates/alerts.html)
+- [x] 알림 채널 상태: 이메일/카카오톡 연결 여부, 카카오 설정법 → `<details>`
+- [x] 📩 카카오 데일리 브리핑 ON/OFF 토글 — `save_meta(kakao_briefing_enabled)`(PRG)
+- [x] 🎯 관심종목 매수 타이밍: 알림 토글, 추가/삭제 폼, "지금 매수 타이밍 보기"(`detect_buy_timings`) → HTMX
+- [x] 📍 수동 가격/RSI 알림 추가 폼 — 티커·조건(`CONDITION_TYPES`)·기준값, `add_alert`(PRG)
+- [x] 등록된 알림 목록 — 상태·조건·기준·발송기록, 재활성화/삭제 버튼(PRG)
+- [x] "📡 지금 조건 체크 + 발송" — `run_alert_check` → HTMX + **hx-confirm**(실제 발송이라 확인창)
+- [x] 데이터: `price_alert.*`(전역 alerts.json), `watchlist.*`(per-user), `kakao_notify`, meta(web/services/meta.py — _meta의 streamlit 의존 회피)
+- 검증: 전역 알림 CRUD(백업/복원 무오염) + per-user 토글·관심종목(격리유저) + fragment. run_alert_check(발송)은 미실행
 
 ### 8. 📌 내 종목 (tracker.py) 🟢(대부분 읽기+일부 저장)
 - [ ] 빈 가격 자동 채움(`auto_fill_missing_prices`) — 진입 시 1회, 실패 종목 "다시 시도" 버튼

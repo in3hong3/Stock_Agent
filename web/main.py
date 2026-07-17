@@ -26,7 +26,7 @@ from urllib.parse import quote
 
 from web.services import (
     market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
-    backtest as bt_svc, journal as journal_svc,
+    backtest as bt_svc, journal as journal_svc, alerts as alerts_svc,
 )
 
 _BASE = Path(__file__).resolve().parent
@@ -231,6 +231,65 @@ async def tab_journal_delete(request: Request, idx: int = Form(...),
                              uid: str = Depends(get_current_user)):
     flash = journal_svc.delete_entry(idx)
     return RedirectResponse(f"/t/journal?flash={quote(flash)}", status_code=303)
+
+
+# ── 가격 알림 탭 (CRUD, PRG + HTMX) ──
+def _redir_alerts(flash: str) -> RedirectResponse:
+    return RedirectResponse(f"/t/alerts?flash={quote(flash)}", status_code=303)
+
+
+@app.get("/t/alerts", response_class=HTMLResponse)
+async def tab_alerts(request: Request, flash: str = "", uid: str = Depends(get_current_user)):
+    ctx = _shell_ctx(uid, active="alerts")
+    ctx.update(alerts_svc.get_context())
+    ctx["flash"] = flash
+    return templates.TemplateResponse(request, "alerts.html", ctx)
+
+
+@app.post("/t/alerts/briefing-toggle")
+async def alerts_briefing_toggle(request: Request, on: str = Form(""), uid: str = Depends(get_current_user)):
+    return _redir_alerts(alerts_svc.toggle_briefing(on == "1"))
+
+
+@app.post("/t/alerts/watchlist-toggle")
+async def alerts_watchlist_toggle(request: Request, on: str = Form(""), uid: str = Depends(get_current_user)):
+    return _redir_alerts(alerts_svc.toggle_watchlist_alert(on == "1"))
+
+
+@app.post("/t/alerts/watchlist/add")
+async def alerts_watch_add(request: Request, ticker: str = Form(""), uid: str = Depends(get_current_user)):
+    return _redir_alerts(alerts_svc.add_watch(ticker))
+
+
+@app.post("/t/alerts/watchlist/remove")
+async def alerts_watch_remove(request: Request, ticker: str = Form(...), uid: str = Depends(get_current_user)):
+    return _redir_alerts(alerts_svc.remove_watch(ticker))
+
+
+@app.post("/t/alerts/add")
+async def alerts_add(request: Request, ticker: str = Form(...), condition: str = Form(...),
+                     value: float = Form(...), uid: str = Depends(get_current_user)):
+    return _redir_alerts(alerts_svc.add_manual(ticker, condition, value))
+
+
+@app.post("/t/alerts/reenable")
+async def alerts_reenable(request: Request, id: int = Form(...), uid: str = Depends(get_current_user)):
+    return _redir_alerts(alerts_svc.reenable(id))
+
+
+@app.post("/t/alerts/remove")
+async def alerts_remove(request: Request, id: int = Form(...), uid: str = Depends(get_current_user)):
+    return _redir_alerts(alerts_svc.remove(id))
+
+
+@app.post("/t/alerts/buy-timings", response_class=HTMLResponse)
+async def alerts_buy_timings(request: Request, uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_alert_buys.html", alerts_svc.buy_timings())
+
+
+@app.post("/t/alerts/check", response_class=HTMLResponse)
+async def alerts_check(request: Request, uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_alert_check.html", alerts_svc.check_now())
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──

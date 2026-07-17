@@ -1,0 +1,8 @@
+{% if buys %}
+<div class="toast" style="color:var(--point);">현재 매수 시그널 {{ buys|length }}건</div>
+{% for s in buys %}
+<div class="muted-sm">• [{{ s.kind }}] <b>{{ s.ticker }} → {{ s.action }}</b> · {{ s.setup }}{% if s.plan %} · {{ s.plan }}{% endif %}</div>
+{% endfor %}
+{% else %}
+<div class="muted-sm">지금은 매수 타이밍인 종목이 없습니다.</div>
+{% endif %}
