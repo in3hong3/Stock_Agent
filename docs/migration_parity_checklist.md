@@ -119,14 +119,16 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 
 ## Phase 2 — CRUD 탭
 
-### 6. 📒 매매일지 (journal.py) 🟢
-- [ ] 거래 입력 폼(clear_on_submit): 날짜·종목·구분(매수/매도)·수량·체결가·메모·포트폴리오 자동반영 체크
-- [ ] 기록 시 `resolve_ticker`, `apply_to_portfolio`(옵션), `add_trade`, 실현손익 토스트
-- [ ] 매매 성과 메트릭 5개: 총거래·실현손익합·승률·평균수익/손실·손익비
-- [ ] 월별/종목별 실현손익 bar차트
-- [ ] 거래 내역 표(역순, 매수🟢/매도🔴)
-- [ ] 🗑️ 기록 삭제 expander — 행번호 선택 + 삭제(`delete_trade`)
-- [ ] 데이터: `trade_journal.*` (trade_journal.csv)
+### 6. 📒 매매일지 (journal.py) 🟢 — ✅ 이전 완료 (web/services/journal.py, templates/journal.html)
+- [x] 거래 입력 폼: 날짜·종목·구분·수량·체결가·메모·포트폴리오 자동반영 → POST(PRG)로 안전 처리
+- [x] 기록 시 `resolve_ticker`, `apply_to_portfolio`(옵션), `add_trade`, 실현손익 → flash 메시지(토스트 대체)
+- [x] 매매 성과 메트릭 5개: 총거래·실현손익합·승률·평균수익/손실·손익비
+- [x] 월별/종목별 실현손익 bar차트 → HTML 막대 리스트(부호별 색)
+- [x] 거래 내역 표(역순, 매수🟢/매도🔴)
+- [x] 🗑️ 기록 삭제 — 드롭다운 선택 + confirm() + 삭제(`delete_trade`)
+- [x] 데이터: `trade_journal.*` (사용자별 trade_journal.csv, contextvar 통해)
+- 검증: **격리 테스트 유저로 add(실현손익+100)·통계·삭제·입력검증 전체 CRUD 확인 후 정리**
+- 버그 수정: Jinja `format`(printf)이 천단위 콤마 미지원 → `num` 커스텀 필터 신설(전역)
 
 ### 7. 🔔 가격알림 (alerts.py) 🟢
 - [ ] 알림 채널 상태: 이메일/카카오톡 연결 여부, 카카오 설정법 expander

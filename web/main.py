@@ -22,13 +22,26 @@ from web.auth import (
     verify_login, make_cookie_value,
 )
 from web.deps import get_current_user, optional_user
+from urllib.parse import quote
+
 from web.services import (
     market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
-    backtest as bt_svc,
+    backtest as bt_svc, journal as journal_svc,
 )
 
 _BASE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE / "templates"))
+
+
+def _num(value, spec="{:,.0f}"):
+    """Python str.format 기반 숫자 포맷 필터 — Jinja 기본 format(printf)은 천단위 콤마 미지원."""
+    try:
+        return spec.format(value)
+    except (TypeError, ValueError):
+        return "-"
+
+
+templates.env.filters["num"] = _num
 
 app = FastAPI(title="Stock Agent v2")
 app.mount("/static", StaticFiles(directory=str(_BASE / "static")), name="static")
@@ -189,6 +202,35 @@ async def tab_backtest_simple(request: Request, ticker: str = Form("NVDA"),
                               rsi_sell: int = Form(70), uid: str = Depends(get_current_user)):
     bt = bt_svc.run_simple(ticker, strategy, period, capital, rsi_buy, rsi_sell)
     return templates.TemplateResponse(request, "_bt_simple.html", {"bt": bt})
+
+
+# ── 매매일지 탭 (CRUD, PRG 패턴) ──
+@app.get("/t/journal", response_class=HTMLResponse)
+async def tab_journal(request: Request, flash: str = "", uid: str = Depends(get_current_user)):
+    from datetime import date
+    ctx = _shell_ctx(uid, active="journal")
+    ctx.update(journal_svc.get_context(flash=flash))
+    ctx["today"] = date.today().isoformat()
+    return templates.TemplateResponse(request, "journal.html", ctx)
+
+
+@app.post("/t/journal/add")
+async def tab_journal_add(request: Request, date: str = Form(...), ticker: str = Form(...),
+                          side: str = Form("매수"), qty: str = Form(...), price: str = Form(...),
+                          memo: str = Form(""), apply: str = Form(""),
+                          uid: str = Depends(get_current_user)):
+    try:
+        flash = journal_svc.add_entry(date, ticker, side, qty, price, memo, apply == "1")
+    except ValueError as e:
+        flash = f"⚠️ {e}"
+    return RedirectResponse(f"/t/journal?flash={quote(flash)}", status_code=303)
+
+
+@app.post("/t/journal/delete")
+async def tab_journal_delete(request: Request, idx: int = Form(...),
+                             uid: str = Depends(get_current_user)):
+    flash = journal_svc.delete_entry(idx)
+    return RedirectResponse(f"/t/journal?flash={quote(flash)}", status_code=303)
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──

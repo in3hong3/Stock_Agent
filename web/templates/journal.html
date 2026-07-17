@@ -1,0 +1,87 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>📒 매매일지</h3>
+<div class="muted-sm">매수/매도를 기록하면 실현손익·승률이 자동 집계됩니다. 포트폴리오 반영도 한 번에.</div>
+
+{% if flash %}<div class="toast" style="margin-top:10px;">{{ flash }}</div>{% endif %}
+
+{# 거래 입력 폼 (PRG — 제출 후 리다이렉트) #}
+<form class="jr-form" method="post" action="/t/journal/add">
+  <div class="bt-grid">
+    <label>날짜<input type="date" name="date" value="{{ today }}" required></label>
+    <label>종목<input type="text" name="ticker" placeholder="NVDA, 엔비디아, 005930" required></label>
+    <label>구분<select name="side"><option>매수</option><option>매도</option></select></label>
+    <label>수량<input type="text" name="qty" placeholder="10" required></label>
+    <label>체결가<input type="text" name="price" placeholder="450.50" required></label>
+  </div>
+  <label style="display:block; margin:8px 0;">메모 (매매 이유 — 복기할 때 가장 중요)
+    <input type="text" name="memo" placeholder="예: 실적 서프라이즈 + RSI 35 반등 구간 분할매수 1차" style="width:100%;"></label>
+  <label style="display:block; margin:6px 0;">
+    <input type="checkbox" name="apply" value="1" checked> 포트폴리오에 자동 반영 (수량/평단가 갱신)</label>
+  <button class="btn-primary" type="submit">✍️ 기록</button>
+</form>
+
+{% if n_trades == 0 %}
+<div class="muted-sm" style="margin-top:16px;">👆 첫 거래를 기록해보세요. 매도 기록부터 실현손익이 집계됩니다.</div>
+{% else %}
+<hr class="sep">
+<h4>📊 매매 성과</h4>
+<div class="metric-row">
+  <div class="metric"><div class="m-label">총 거래</div><div class="m-val">{{ stats.n_trades }}건</div></div>
+  <div class="metric"><div class="m-label">실현손익 합계</div><div class="m-val">{{ stats.total_realized | num('{:+,.0f}') }}</div></div>
+  <div class="metric"><div class="m-label">승률</div><div class="m-val">{{ (stats.win_rate ~ '%') if stats.n_sells else '-' }}</div></div>
+  <div class="metric"><div class="m-label">평균 수익/손실</div><div class="m-val">{{ stats.avg_win | num('{:+,.0f}') }} / {{ stats.avg_loss | num('{:+,.0f}') }}</div></div>
+  <div class="metric"><div class="m-label">손익비</div><div class="m-val">{{ stats.profit_factor if stats.profit_factor else '-' }}</div></div>
+</div>
+
+<div class="paper-cols" style="grid-template-columns:1fr 1fr;">
+  {% if monthly %}
+  <div><b>월별 실현손익</b>
+    {% for b in monthly %}
+    <div class="bar-row"><span class="bar-label">{{ b.label }}</span>
+      <span class="bar-track"><span class="bar-fill {{ b.cls }}" style="width:{{ b.pct }}%;"></span></span>
+      <span class="bar-val {{ b.cls }}">{{ b.value | num('{:+,.0f}') }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if by_ticker %}
+  <div><b>종목별 실현손익</b>
+    {% for b in by_ticker %}
+    <div class="bar-row"><span class="bar-label">{{ b.label }}</span>
+      <span class="bar-track"><span class="bar-fill {{ b.cls }}" style="width:{{ b.pct }}%;"></span></span>
+      <span class="bar-val {{ b.cls }}">{{ b.value | num('{:+,.0f}') }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<hr class="sep">
+<h4>📋 거래 내역</h4>
+<div class="table-scroll"><table class="rank-table">
+  <thead><tr><th>날짜</th><th>티커</th><th>종목명</th><th>구분</th><th>수량</th><th>체결가</th><th>매도시 평단</th><th>실현손익</th><th>메모</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.date }}</td><td><b>{{ r.ticker }}</b></td><td>{{ r.name }}</td><td>{{ r.side }}</td>
+      <td>{{ r.quantity }}</td><td>{{ r.price }}</td>
+      <td>{{ '%.2f'|format(r.avg_at_sale) if r.avg_at_sale else '-' }}</td>
+      <td class="{{ 'c-up' if (r.realized or 0) >= 0 else 'c-down' }}">{{ r.realized | num('{:+,.2f}') if r.realized is not none else '-' }}</td>
+      <td class="muted-sm">{{ r.memo }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+
+<details class="news-card" style="margin-top:12px;">
+  <summary>🗑️ 기록 삭제</summary>
+  <form method="post" action="/t/journal/delete" class="inline-form" style="margin-top:8px;"
+        onsubmit="return confirm('선택한 기록을 삭제할까요? (되돌릴 수 없습니다)')">
+    <select name="idx" style="flex:1;">
+      {% for o in delete_options %}<option value="{{ o.idx }}">{{ o.label }}</option>{% endfor %}
+    </select>
+    <button class="btn-ghost" type="submit" style="border-color:#FF4B4B55; color:#FF6B6B;">삭제 실행</button>
+  </form>
+  <div class="muted-sm" style="margin-top:6px;">⚠️ 삭제는 되돌릴 수 없습니다. 포트폴리오 수량은 자동 복구되지 않아요(기록만 삭제).</div>
+</details>
+{% endif %}
+{% endblock %}
