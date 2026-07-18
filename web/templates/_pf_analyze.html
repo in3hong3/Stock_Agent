@@ -1,0 +1,17 @@
+{% if error %}<div class="toast" style="color:#FFC94B;border-color:#FFA50055;">⚠️ {{ error }}</div>{% else %}
+{% set s = summary %}
+<div class="metric-row">
+  <div class="metric"><div class="m-label">보유 종목</div><div class="m-val">{{ s.total_stocks or 0 }}개</div></div>
+  <div class="metric"><div class="m-label">총 평가액</div><div class="m-val">₩{{ (s.total_evaluation or 0)|num('{:,.0f}') }}</div></div>
+  <div class="metric"><div class="m-label">총 평가손익</div><div class="m-val">₩{{ (s.total_profit_loss or 0)|num('{:,.0f}') }}</div></div>
+  <div class="metric"><div class="m-label">평균 수익률</div><div class="m-val">{{ (s.average_profit_rate or 0)|num('{:.2f}') }}%</div></div>
+</div>
+{% for st in stocks %}
+<details class="news-card" style="margin-top:6px;">
+  <summary><b>{{ st.name }}</b> ({{ st.ticker }}) · {{ st.quantity|num('{:,.0f}') }}주 · <span class="{{ 'c-up' if st.profit_rate >= 0 else 'c-down' }}">{{ st.profit_rate|num('{:.1f}') }}%</span></summary>
+  <div class="paper-front" style="margin-top:6px;">{{ st.feedback_html|safe }}</div>
+  {% if st.rag %}<div class="muted-sm" style="margin-top:6px;"><b>📺 관련 영상</b>
+    {% for v in st.rag %}<div>- <a href="{{ v.link }}" target="_blank" rel="noopener">{{ v.title }}</a></div>{% endfor %}</div>{% endif %}
+</details>
+{% endfor %}
+{% endif %}

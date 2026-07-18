@@ -1,0 +1,17 @@
+{% if error %}<div class="toast" style="color:#FFC94B;border-color:#FFA50055;">⚠️ {{ error }}</div>{% else %}
+<div class="paper-cols" style="grid-template-columns:auto 1fr; gap:20px; align-items:start;">
+  <div>
+    <b>종목별 비중</b>
+    <div class="chart-box" style="text-align:center;">{{ pie_svg|safe }}</div>
+  </div>
+  <div>
+    <b>종목별 손익률</b>
+    {% for b in bars %}
+    <div class="bar-row"><span class="bar-label">{{ b.label }}</span>
+      <span class="bar-track"><span class="bar-fill {{ b.cls }}" style="width:{{ b.pct }}%;"></span></span>
+      <span class="bar-val {{ b.cls }}">{{ b.value|num('{:+.1f}') }}%</span></div>
+    {% endfor %}
+  </div>
+</div>
+<div class="muted-sm" style="margin-top:8px;">※ 섹터 분류(파이/트리맵/선버스트)는 후속 이전 — 현재는 종목 단위 비중/손익.</div>
+{% endif %}

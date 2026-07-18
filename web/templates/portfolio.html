@@ -110,8 +110,52 @@
   </form>
 </div>
 
-<div class="muted-sm" style="margin-top:16px; padding-top:10px; border-top:1px solid var(--border);">
-  ℹ️ 분석 서브탭(📋 종목상세 · 📊 시각화 · 🔔 알림 · ⚖️ 리밸런싱 · 💬 개인화 챗봇)과 현금기준 실행지시는 후속 이전 예정입니다.
+<hr class="sep">
+<div class="subtabs" id="pfSub">
+  <button class="subtab active" data-p="detail">📋 종목상세</button>
+  <button class="subtab" data-p="viz">📊 시각화</button>
+  <button class="subtab" data-p="alerts">🔔 알림</button>
+  <button class="subtab" data-p="rebal">⚖️ 리밸런싱</button>
+  <button class="subtab" data-p="chat">💬 개인화 챗봇</button>
 </div>
+
+<div class="subpanel active" data-p="detail">
+  <button class="btn-primary" hx-post="/t/portfolio/analyze" hx-target="#pf-detail" hx-swap="innerHTML" hx-disabled-elt="this" hx-indicator="#pf-detail-ind">🚀 분석 실행</button>
+  <div id="pf-detail-ind" class="htmx-indicator muted-sm" style="padding:6px;">포트폴리오 AI 분석 중… (수십 초)</div>
+  <div id="pf-detail"></div>
+</div>
+<div class="subpanel" data-p="viz">
+  <button class="btn-primary" hx-post="/t/portfolio/viz" hx-target="#pf-viz" hx-swap="innerHTML" hx-disabled-elt="this" hx-indicator="#pf-viz-ind">📊 시각화 생성</button>
+  <div id="pf-viz-ind" class="htmx-indicator muted-sm" style="padding:6px;">계산 중…</div>
+  <div id="pf-viz"></div>
+</div>
+<div class="subpanel" data-p="alerts">
+  <button class="btn-primary" hx-post="/t/portfolio/alerts" hx-target="#pf-alerts" hx-swap="innerHTML" hx-disabled-elt="this" hx-indicator="#pf-alerts-ind">🔍 알림 확인</button>
+  <div id="pf-alerts-ind" class="htmx-indicator muted-sm" style="padding:6px;">알림 확인 중… (LLM)</div>
+  <div id="pf-alerts"></div>
+</div>
+<div class="subpanel" data-p="rebal">
+  <button class="btn-primary" hx-post="/t/portfolio/rebalance" hx-target="#pf-rebal" hx-swap="innerHTML" hx-disabled-elt="this" hx-indicator="#pf-rebal-ind">⚖️ 리밸런싱 분석</button>
+  <div id="pf-rebal-ind" class="htmx-indicator muted-sm" style="padding:6px;">리밸런싱 분석 중… (LLM+최적화)</div>
+  <div id="pf-rebal"></div>
+</div>
+<div class="subpanel" data-p="chat">
+  <div class="muted-sm">보유 종목 정보를 활용한 맞춤형 투자 조언</div>
+  <form class="inline-form" hx-post="/t/portfolio/chat" hx-target="#pf-chat" hx-swap="innerHTML"
+        hx-disabled-elt="button" hx-indicator="#pf-chat-ind" hx-on::after-request="this.reset()">
+    <input type="text" name="query" placeholder="예: 내가 보유한 AI 종목들 어때?" style="flex:1;">
+    <button class="btn-primary" type="submit">전송</button>
+  </form>
+  <div id="pf-chat-ind" class="htmx-indicator muted-sm" style="padding:6px;">답변 생성 중…</div>
+  <div id="pf-chat">{% with messages=pchat_history, post_url="/t/portfolio/chat", chat_id="pf-chat" %}{% include "_chat_history.html" %}{% endwith %}</div>
+</div>
+
+<script>
+document.getElementById('pfSub').addEventListener('click', function (e) {
+  var btn = e.target.closest('.subtab'); if (!btn) return;
+  document.querySelectorAll('#pfSub .subtab').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('active', p.dataset.p === btn.dataset.p));
+});
+</script>
 {% endif %}
 {% endblock %}

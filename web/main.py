@@ -28,6 +28,7 @@ from web.services import (
     market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
     backtest as bt_svc, journal as journal_svc, alerts as alerts_svc, tracker as tracker_svc,
     portfolio as pf_svc, analysts as an_svc, admin as admin_svc,
+    portfolio_analysis as pfa_svc,
 )
 
 import os as _os
@@ -337,6 +338,7 @@ async def tab_portfolio(request: Request, flash: str = "", uid: str = Depends(ge
     ctx = _shell_ctx(uid, active="portfolio")
     ctx.update(pf_svc.get_context())
     ctx["flash"] = flash
+    ctx["pchat_history"] = pfa_svc.pchat_history(uid)
     return templates.TemplateResponse(request, "portfolio.html", ctx)
 
 
@@ -391,6 +393,34 @@ async def pf_record_sells(request: Request, action: str = Form("record"),
     prices = {k[len("price_"):]: float(v) for k, v in form.items()
               if k.startswith("price_") and v}
     return _redir_pf(pf_svc.record_sells(prices))
+
+
+# ── 포트폴리오 분석 서브탭 (온디맨드 HTMX) ──
+@app.post("/t/portfolio/analyze", response_class=HTMLResponse)
+async def pf_analyze(request: Request, uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_pf_analyze.html", pfa_svc.analyze())
+
+
+@app.post("/t/portfolio/viz", response_class=HTMLResponse)
+async def pf_viz(request: Request, uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_pf_viz.html", pfa_svc.viz())
+
+
+@app.post("/t/portfolio/alerts", response_class=HTMLResponse)
+async def pf_alerts_analysis(request: Request, uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_pf_alerts.html", pfa_svc.alerts())
+
+
+@app.post("/t/portfolio/rebalance", response_class=HTMLResponse)
+async def pf_rebalance(request: Request, uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_pf_rebalance.html", pfa_svc.rebalance())
+
+
+@app.post("/t/portfolio/chat", response_class=HTMLResponse)
+async def pf_chat(request: Request, query: str = Form(...), uid: str = Depends(get_current_user)):
+    msgs = pfa_svc.personalized_chat(uid, query)
+    return templates.TemplateResponse(request, "_chat_history.html",
+                                      {"messages": msgs, "post_url": "/t/portfolio/chat", "chat_id": "pf-chat"})
 
 
 # ── 분석관 탭 (진입점검 규칙기반 + RAG/기술/뉴스/종합 LLM) ──

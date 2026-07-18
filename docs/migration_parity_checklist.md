@@ -168,7 +168,8 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 - [x] 💰 트레이딩 시드/리스크 폼 · 💵 보유 현금 폼 — `save_meta`
 - [x] 📡 가격 업데이트 버튼 — `PriceUpdater`
 - 검증: **격리 유저로 샘플·편집·매도감지·매매일지연동(+360)·삭제·현금/시드·빈상태 전체 CRUD 통과**
-- **보류(후속 이전)**: 💵 현금기준 실행지시(`build_action_plan`) · 🚀 분석실행(`PortfolioAnalyzer` 💰) · 서브탭5개(📋종목상세 · 📊시각화 plotly · 🔔알림 💰 · ⚖️리밸런싱 💰 · 💬개인화챗봇 💰). 관리 핵심은 완료, 분석 레이어는 별도.
+- ✅ **분석 서브탭 5개 이전 완료** (web/services/portfolio_analysis.py, 온디맨드 HTMX): 📋종목상세(`PortfolioAnalyzer` 💰) · 📊시각화(plotly→인라인 SVG 파이+손익바) · 🔔알림(`PortfolioAlert` 💰) · ⚖️리밸런싱(`PortfolioRebalancer` 💰) · 💬개인화챗봇(`PersonalizedRAG` 💬💰, 인메모리 기록). 검증: 시각화 결정적 통과 + 4 fragment 렌더(LLM 미호출)
+- **남은 보류**: 💵 현금기준 실행지시(`build_action_plan`) · 시각화 섹터분류(파이/트리맵/선버스트) · 리밸런싱 효율적투자선 차트
 
 ---
 

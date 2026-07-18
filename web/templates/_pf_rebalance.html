@@ -1,0 +1,21 @@
+{% if error %}<div class="toast" style="color:#FFC94B;border-color:#FFA50055;">⚠️ {{ error }}</div>{% else %}
+<div class="metric-row">
+  <div class="metric"><div class="m-label">총 평가금액</div><div class="m-val">${{ total_value|num('{:,.0f}') }}</div></div>
+  <div class="metric"><div class="m-label">평균 수익률</div><div class="m-val">{{ avg_profit|num('{:.2f}') }}%</div></div>
+  <div class="metric"><div class="m-label">손실 종목 비율</div><div class="m-val">{{ losing_ratio|num('{:.1f}') }}%</div></div>
+</div>
+{% if sector_weights %}
+<b>섹터별 비중</b>
+{% for sec, w in sector_weights.items() %}
+<div class="bar-row"><span class="bar-label">{{ sec }}</span>
+  <span class="bar-track"><span class="bar-fill c-up" style="width:{{ w }}%;"></span></span>
+  <span class="bar-val">{{ w|num('{:.1f}') }}%</span></div>
+{% endfor %}
+{% endif %}
+<b style="display:block;margin-top:10px;">💡 리밸런싱 제안</b>
+<div class="paper-front">{{ suggestions_html|safe }}</div>
+{% if total_cost is not none %}
+<div class="muted-sm" style="margin-top:8px;">예상 비용(수수료+세금) {{ total_cost|num('{:,.0f}') }}원 · 비용비율 {{ cost_ratio|num('{:.2f}') }}%</div>
+{% endif %}
+<div class="muted-sm" style="margin-top:6px;">※ 효율적 투자선 차트는 후속 이전.</div>
+{% endif %}
