@@ -1,0 +1,23 @@
+{% if not messages %}
+<div class="muted-sm">👆 위에서 질문을 입력하세요!</div>
+{% else %}
+{% for m in messages|reverse %}
+<div class="chat-msg chat-{{ m.role }}">
+  <div class="chat-role">{{ '🙂 나' if m.role == 'user' else '🤖 분석관' }}</div>
+  <div class="paper-front">{{ m.content_html|safe }}</div>
+  {% if m.sources %}
+  <details class="news-card" style="margin-top:6px;"><summary>📚 참고 영상 {{ m.sources|length }}건</summary>
+    {% for s in m.sources %}<div class="muted-sm">- {{ s.get('영상제목', '') }} · {{ s.get('채널명', '') }} · <a href="{{ s.get('영상링크', '#') }}" target="_blank" rel="noopener">보기</a></div>{% endfor %}
+  </details>
+  {% endif %}
+  {% if loop.first and m.followups %}
+  <div class="chk-group" style="margin-top:6px;">
+    {% for q in m.followups %}
+    <button class="btn-ghost btn-sm" hx-post="{{ post_url }}" hx-vals='{"query": {{ q|tojson }}}'
+            hx-target="#{{ chat_id }}" hx-swap="innerHTML">💬 {{ q }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}

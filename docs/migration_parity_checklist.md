@@ -172,32 +172,31 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 
 ---
 
-## Phase 3 — 분석관 채팅 (analysts.py) 💬
+## Phase 3 — 분석관 (analysts.py) 💬 — ✅ 이전 완료 (web/services/analysts.py, templates/analysts.html)
 
-### 10-a. 🎯 진입 점검 (render_tab_entry_check) 🔵(규칙기반, LLM 0)
-- [ ] 티커·성향·점검 버튼, `analyze_stock`+`decide_action` ⏱️(300s)
-- [ ] 결론 카드(적극진입/분할/비추/관망), 종합해석(자연어), 4대관점 메트릭(타이밍/밸류/실적/스마트머니)
-- [ ] 진입 플랜(진입/손절/목표/손익비), 판단이 바뀌는 조건, 판단근거 expander, 차트 토글
+> 기존 Streamlit도 토큰 스트리밍이 아니라 요청/응답 → SSE 대신 HTMX POST + 사용자별 인메모리 대화기록.
+> 에이전트/라우터는 지연 싱글턴. 5개 서브탭은 클라이언트 JS 토글.
 
-### 10-b. 🎥 영상분석 RAG (render_tab_rag) 💬💰🔑
-- [ ] 채팅 입력, `agentic_router.rag_agent.process`, 대화이력 6개, 소스(참고영상), 추천 후속질문 버튼
-- [ ] `rag_messages`, `pending_followup_question` 🔑
+### 10-a. 🎯 진입 점검 🔵(규칙기반, LLM 0)
+- [x] 티커·성향·점검, `analyze_stock`+`decide_action` → HTMX POST /t/analysts/entry
+- [x] 결론 카드(적극/분할/비추/관망), 4대관점 메트릭(타이밍/밸류/실적/스마트머니), 진입 플랜, 판단근거
+- [~] 종합해석 자연어 프롬프트·차트 토글 — 축약(핵심 정보는 유지)
 
-### 10-c. 📈 기술분석 (render_tab_tech) 💬💰🔑
-- [ ] 실시간 캔들차트 expander — 티커/기간/MA/볼린저 옵션, `build_candlestick_chart` ⏱️(300s)
-- [ ] 채팅, `tech_agent.process`, 지표요약(현재가·추세·RSI·MACD·볼린저·지지저항·52주·POC)
-- [ ] `tech_messages` 🔑
+### 10-b. 🎥 영상분석 RAG 💬💰
+- [x] 채팅, `rag_agent.process`, 대화이력 6개, 소스(참고영상), 후속질문 버튼(hx-vals) → 인메모리 기록
 
-### 10-d. 📰 뉴스분석 (render_tab_news) 💰🔑
-- [ ] 티커·뉴스개수 입력 + 분석 버튼, `NewsAgent.process`
-- [ ] 감성점수/시장감성/뉴스수 메트릭 + 감성 바 + 주요토픽 + AI분석 전문 + 뉴스목록
-- [ ] `news_result` 🔑
+### 10-c. 📈 기술분석 💬💰
+- [x] 채팅, `tech_agent.process`, 지표요약(현재가·추세·RSI·MACD·볼린저·지지저항·52주·POC)
+- [ ] 실시간 캔들차트 — **보류**(plotly, 트래커와 동일 정책)
 
-### 10-e. 🔀 종합분석 (render_tab_comprehensive) 💬💰🔑
-- [ ] 에이전트 선택 체크박스(RAG/퀀트/기술) + 채팅
-- [ ] `agentic_router.route(force_agents=...)`, 참여에이전트 태그, 소스
-- [ ] `comprehensive_messages` 🔑
-- [ ] ⚠️ **밸류에이션 분석관(render_tab_quant)** — 코드엔 있으나 app.py 탭에 미연결. 이전 시 포함 여부 결정
+### 10-d. 📰 뉴스분석 💰
+- [x] 티커·뉴스개수 + 분석, `NewsAgent.process`, 감성점수/감성/뉴스수 + 감성바 + 토픽 + AI전문 + 뉴스목록
+
+### 10-e. 🔀 종합분석 💬💰
+- [x] 에이전트 체크박스(RAG/퀀트/기술) + 채팅, `router.route(force_agents)`, 참여태그, 소스
+- [ ] 밸류에이션 분석관(render_tab_quant) — 원래 app.py 미연결(죽은 기능)이라 이전 제외
+
+- 검증: 진입점검 실 티커 판정·렌더 + 채팅/뉴스 fragment 렌더. LLM 채팅은 미호출(경로·템플릿만)
 
 ---
 

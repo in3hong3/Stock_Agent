@@ -27,7 +27,7 @@ from urllib.parse import quote
 from web.services import (
     market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
     backtest as bt_svc, journal as journal_svc, alerts as alerts_svc, tracker as tracker_svc,
-    portfolio as pf_svc,
+    portfolio as pf_svc, analysts as an_svc,
 )
 
 _BASE = Path(__file__).resolve().parent
@@ -379,6 +379,57 @@ async def pf_record_sells(request: Request, action: str = Form("record"),
     prices = {k[len("price_"):]: float(v) for k, v in form.items()
               if k.startswith("price_") and v}
     return _redir_pf(pf_svc.record_sells(prices))
+
+
+# ── 분석관 탭 (진입점검 규칙기반 + RAG/기술/뉴스/종합 LLM) ──
+def _chat_ctx(kind: str, messages: list) -> dict:
+    return {"messages": messages, "post_url": f"/t/analysts/{kind}", "chat_id": f"{kind}-chat"}
+
+
+@app.get("/t/analysts", response_class=HTMLResponse)
+async def tab_analysts(request: Request, uid: str = Depends(get_current_user)):
+    from modules.portfolio_advisor import PERSONAS
+    ctx = _shell_ctx(uid, active="analysts")
+    ctx["personas"] = [{"key": k, "label": v["label"]} for k, v in PERSONAS.items()]
+    ctx["default_stance"] = "expert" if "expert" in PERSONAS else next(iter(PERSONAS))
+    ctx["rag_history"] = an_svc.history(uid, "rag")
+    ctx["tech_history"] = an_svc.history(uid, "tech")
+    ctx["comp_history"] = an_svc.history(uid, "comp")
+    return templates.TemplateResponse(request, "analysts.html", ctx)
+
+
+@app.post("/t/analysts/entry", response_class=HTMLResponse)
+async def an_entry(request: Request, ticker: str = Form(""), stance: str = Form("expert"),
+                   uid: str = Depends(get_current_user)):
+    res = an_svc.entry_check(ticker, stance)
+    return templates.TemplateResponse(request, "_entry_result.html",
+                                      {"res": res, "error": res.get("error")})
+
+
+@app.post("/t/analysts/rag", response_class=HTMLResponse)
+async def an_rag(request: Request, query: str = Form(...), uid: str = Depends(get_current_user)):
+    msgs = an_svc.rag_chat(uid, query)
+    return templates.TemplateResponse(request, "_chat_history.html", _chat_ctx("rag", msgs))
+
+
+@app.post("/t/analysts/tech", response_class=HTMLResponse)
+async def an_tech(request: Request, query: str = Form(...), uid: str = Depends(get_current_user)):
+    msgs = an_svc.tech_chat(uid, query)
+    return templates.TemplateResponse(request, "_chat_history.html", _chat_ctx("tech", msgs))
+
+
+@app.post("/t/analysts/comp", response_class=HTMLResponse)
+async def an_comp(request: Request, query: str = Form(...), uid: str = Depends(get_current_user)):
+    form = await request.form()
+    agents = form.getlist("agents")
+    msgs = an_svc.comprehensive_chat(uid, query, agents)
+    return templates.TemplateResponse(request, "_chat_history.html", _chat_ctx("comp", msgs))
+
+
+@app.post("/t/analysts/news", response_class=HTMLResponse)
+async def an_news(request: Request, ticker: str = Form("NVDA"), max_news: int = Form(10),
+                  uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_news_result.html", an_svc.news_analyze(ticker, max_news))
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──

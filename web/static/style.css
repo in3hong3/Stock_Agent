@@ -272,3 +272,9 @@ h5 { margin: 6px 0; font-size: 0.95rem; }
 .pf-table input { height: 32px; padding: 0 8px; border-radius: 6px; background: var(--bg);
   color: var(--text); border: 1px solid var(--border); font-size: 0.85rem; }
 .pf-table td { vertical-align: middle; }
+
+/* ── 분석관 채팅 ── */
+.chat-msg { padding: 10px 14px; border-radius: 10px; margin: 8px 0; }
+.chat-user { background: rgba(0,255,163,0.06); border: 1px solid rgba(0,255,163,0.15); }
+.chat-assistant { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--point); }
+.chat-role { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; font-weight: 700; }

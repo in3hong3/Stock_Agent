@@ -1,0 +1,37 @@
+{% if error %}
+<div class="toast" style="color:#FFC94B; border-color:#FFA50055;">⚠️ {{ error }}</div>
+{% else %}
+{% set r = res %}
+<div class="hot-hero" style="background:linear-gradient(160deg,#16202A,#16181F); border-color:{{ r.vcolor }}55;">
+  <div class="muted-sm">{{ r.ticker }} · {{ r.stance_label }} 관점 · 시장국면 {{ r.regime_label }}</div>
+  <div style="font-size:1.5rem; font-weight:700; color:{{ r.vcolor }}; margin:6px 0;">{{ r.vicon }} {{ r.verdict }}</div>
+  <div class="muted-sm">종합 점수 {{ r.score|num('{:+.0f}') }} · 셋업: {{ r.setup }}</div>
+</div>
+
+<div class="metric-row">
+  <div class="metric"><div class="m-label">📈 타이밍</div><div class="m-val">RSI {{ r.rsi or '?' }}</div><div class="muted-sm">ADX {{ r.adx or '?' }} {{ r.trend_regime or '' }} · 주봉 {{ r.wk_trend or '' }}</div></div>
+  <div class="metric"><div class="m-label">🏷️ 밸류에이션</div><div class="m-val">{{ r.valuation.verdict or '평가불가' }}</div></div>
+  <div class="metric"><div class="m-label">⚙️ 실적 엔진</div><div class="m-val">{{ ('EPS ' ~ (r.eps_growth|num('{:+.0f}')) ~ '%') if r.eps_growth is not none else '데이터 없음' }}</div></div>
+  <div class="metric"><div class="m-label">🐋 스마트머니</div><div class="m-val">{% if r.insider_buying %}내부자 순매수 🟢{% elif r.inst_pct is not none %}기관 {{ r.inst_pct|num('{:.0f}') }}%{% else %}데이터 없음{% endif %}</div></div>
+</div>
+
+{% if r.entry %}
+<h4>🎯 진입 플랜</h4>
+<div class="metric-row">
+  <div class="metric"><div class="m-label">진입가</div><div class="m-val">{{ r.entry|num('{:,.2f}') }}</div></div>
+  <div class="metric"><div class="m-label">손절가</div><div class="m-val">{{ r.stop|num('{:,.2f}') }}</div><div class="muted-sm c-down">{{ ((r.stop/r.entry-1)*100)|num('{:+.1f}') }}%</div></div>
+  <div class="metric"><div class="m-label">목표가</div><div class="m-val">{{ r.target|num('{:,.2f}') }}</div><div class="muted-sm c-up">{{ ((r.target/r.entry-1)*100)|num('{:+.1f}') }}%</div></div>
+  <div class="metric"><div class="m-label">손익비</div><div class="m-val">1 : {{ r.rr }}</div></div>
+</div>
+{% else %}
+<div class="muted-sm">💡 {{ r.plan or '명확한 진입 트리거가 없어 관망 구간입니다.' }}</div>
+{% endif %}
+
+<details class="news-card" style="margin-top:8px;">
+  <summary>📋 판단 근거 (규칙 엔진)</summary>
+  {% for pts, reason in r.reasons %}<div class="muted-sm">- {{ pts }} {{ reason }}</div>{% endfor %}
+  {% for ex in r.extra %}<div class="muted-sm">- {{ ex }}</div>{% endfor %}
+  <div class="muted-sm" style="color:#64748B;">지지 {{ r.support|num('{:,.1f}') if r.support else '?' }} · 저항 {{ r.resistance|num('{:,.1f}') if r.resistance else '?' }} · MA50 {{ r.ma50|num('{:,.1f}') if r.ma50 else '?' }} · MA200 {{ r.ma200 or '?' }} · 현재가 {{ r.price|num('{:,.2f}') if r.price else '?' }}</div>
+</details>
+<div class="muted-sm" style="margin-top:6px;">⚠️ 규칙 기반 기술·밸류 종합 신호. 최신 뉴스·이벤트는 별도 확인. 투자 권유가 아닙니다.</div>
+{% endif %}

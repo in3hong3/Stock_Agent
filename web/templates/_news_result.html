@@ -1,0 +1,19 @@
+{% if error %}
+<div class="toast" style="color:#FFC94B; border-color:#FFA50055;">⚠️ {{ error }}</div>
+{% else %}
+<div class="metric-row">
+  <div class="metric"><div class="m-label">감성 점수</div><div class="m-val">{{ score }}/100</div></div>
+  <div class="metric"><div class="m-label">시장 감성</div><div class="m-val">{{ sentiment }}</div></div>
+  <div class="metric"><div class="m-label">분석 뉴스 수</div><div class="m-val">{{ news_count }}건</div></div>
+</div>
+<div class="prog" style="height:14px;"><div class="prog-fill" style="width:{{ score }}%; background:{{ bar_color }};"></div></div>
+{% if topics %}<div class="muted-sm" style="margin-top:8px;">🏷️ 주요 토픽: {% for t in topics %}<code>{{ t }}</code> {% endfor %}</div>{% endif %}
+<details class="news-card" style="margin-top:8px;" open><summary>🤖 AI 분석 전문</summary>
+  <div class="paper-front">{{ summary_html|safe }}</div>
+</details>
+<h4>📋 최신 뉴스 ({{ news|length }}건)</h4>
+{% for n in news %}
+<div class="news-item"><a href="{{ n.link }}" target="_blank" rel="noopener">{{ n.title }}</a>
+  <div class="muted-sm">{{ n.publisher }} · {{ n.published }}</div></div>
+{% else %}<div class="muted-sm">수집된 뉴스가 없습니다.</div>{% endfor %}
+{% endif %}

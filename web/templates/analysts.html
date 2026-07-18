@@ -1,0 +1,86 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>🤖 분석관</h3>
+
+<div class="subtabs" id="anSub">
+  <button class="subtab active" data-p="entry">🎯 진입 점검</button>
+  <button class="subtab" data-p="rag">🎥 영상분석 (RAG)</button>
+  <button class="subtab" data-p="tech">📈 기술분석</button>
+  <button class="subtab" data-p="news">📰 뉴스분석</button>
+  <button class="subtab" data-p="comp">🔀 종합분석</button>
+</div>
+
+{# 🎯 진입 점검 #}
+<div class="subpanel active" data-p="entry">
+  <div class="muted-sm">매수 전에 물어보세요. 진입 타이밍·밸류에이션·실적 엔진을 종합해 판단합니다. (규칙 기반·무료)</div>
+  <form class="inline-form" hx-post="/t/analysts/entry" hx-target="#entry-out" hx-swap="innerHTML"
+        hx-disabled-elt="button" hx-indicator="#entry-ind">
+    <input type="text" name="ticker" placeholder="예: NVDA, 엔비디아, 005930" style="flex:2;">
+    <select name="stance">{% for p in personas %}<option value="{{ p.key }}" {{ 'selected' if p.key == default_stance else '' }}>{{ p.label }}</option>{% endfor %}</select>
+    <button class="btn-primary" type="submit">🔍 점검</button>
+  </form>
+  <div id="entry-ind" class="htmx-indicator muted-sm" style="padding:6px;">시세·지표·밸류에이션 분석 중…</div>
+  <div id="entry-out"></div>
+</div>
+
+{# 🎥 RAG #}
+<div class="subpanel" data-p="rag">
+  <div class="muted-sm">YouTube 영상 자막 기반 주식 정보 및 시황 검색</div>
+  <form class="inline-form" hx-post="/t/analysts/rag" hx-target="#rag-chat" hx-swap="innerHTML"
+        hx-disabled-elt="button" hx-indicator="#rag-ind" hx-on::after-request="this.reset()">
+    <input type="text" name="query" placeholder="질문 (예: 삼성전자 전망은?)" style="flex:1;">
+    <button class="btn-primary" type="submit">전송</button>
+  </form>
+  <div id="rag-ind" class="htmx-indicator muted-sm" style="padding:6px;">🔀 라우팅 및 답변 생성 중…</div>
+  <div id="rag-chat">{% with messages=rag_history, post_url="/t/analysts/rag", chat_id="rag-chat" %}{% include "_chat_history.html" %}{% endwith %}</div>
+</div>
+
+{# 📈 기술분석 #}
+<div class="subpanel" data-p="tech">
+  <div class="muted-sm">yfinance 실시간 주가·보조지표 분석 (예: TSLA 매수 타점 어때?) · 캔들차트는 후속 이전</div>
+  <form class="inline-form" hx-post="/t/analysts/tech" hx-target="#tech-chat" hx-swap="innerHTML"
+        hx-disabled-elt="button" hx-indicator="#tech-ind" hx-on::after-request="this.reset()">
+    <input type="text" name="query" placeholder="종목명/티커와 질문 (예: 엔비디아 차트 분석해줘)" style="flex:1;">
+    <button class="btn-primary" type="submit">전송</button>
+  </form>
+  <div id="tech-ind" class="htmx-indicator muted-sm" style="padding:6px;">📈 차트 데이터 분석 중…</div>
+  <div id="tech-chat">{% with messages=tech_history, post_url="/t/analysts/tech", chat_id="tech-chat" %}{% include "_chat_history.html" %}{% endwith %}</div>
+</div>
+
+{# 📰 뉴스분석 #}
+<div class="subpanel" data-p="news">
+  <div class="muted-sm">yfinance 최신 뉴스 수집 + AI 감성 분석</div>
+  <form class="inline-form" hx-post="/t/analysts/news" hx-target="#news-out" hx-swap="innerHTML"
+        hx-disabled-elt="button" hx-indicator="#news-ind">
+    <input type="text" name="ticker" value="NVDA" style="width:120px;">
+    <select name="max_news"><option>5</option><option selected>10</option><option>15</option><option>20</option></select>
+    <button class="btn-primary" type="submit">🔍 뉴스 분석</button>
+  </form>
+  <div id="news-ind" class="htmx-indicator muted-sm" style="padding:6px;">📰 뉴스 수집 및 감성 분석 중…</div>
+  <div id="news-out"></div>
+</div>
+
+{# 🔀 종합분석 #}
+<div class="subpanel" data-p="comp">
+  <div class="muted-sm">원하는 에이전트들을 선택해 한 번에 종합 리뷰</div>
+  <form class="inline-form" hx-post="/t/analysts/comp" hx-target="#comp-chat" hx-swap="innerHTML"
+        hx-disabled-elt="button" hx-indicator="#comp-ind" hx-on::after-request="this.querySelector('input[name=query]').value=''">
+    <label class="muted-sm"><input type="checkbox" name="agents" value="rag" checked> 🎥영상</label>
+    <label class="muted-sm"><input type="checkbox" name="agents" value="quant" checked> 📊가치</label>
+    <label class="muted-sm"><input type="checkbox" name="agents" value="tech" checked> 📈기술</label>
+    <input type="text" name="query" placeholder="종목명과 질문 (예: 엔비디아 지금 사도 돼?)" style="flex:1;">
+    <button class="btn-primary" type="submit">전송</button>
+  </form>
+  <div id="comp-ind" class="htmx-indicator muted-sm" style="padding:6px;">🔀 선택된 에이전트 동시 분석 중…</div>
+  <div id="comp-chat">{% with messages=comp_history, post_url="/t/analysts/comp", chat_id="comp-chat" %}{% include "_chat_history.html" %}{% endwith %}</div>
+</div>
+
+<script>
+document.getElementById('anSub').addEventListener('click', function (e) {
+  var btn = e.target.closest('.subtab'); if (!btn) return;
+  var p = btn.dataset.p;
+  document.querySelectorAll('#anSub .subtab').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.subpanel').forEach(pan => pan.classList.toggle('active', pan.dataset.p === p));
+});
+</script>
+{% endblock %}
