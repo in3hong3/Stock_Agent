@@ -200,13 +200,15 @@ Streamlit 위젯의 생김새·조작법을 똑같이 재현하는 게 아니다
 
 ---
 
-## Phase 4 — 관리자 (admin.py) 🟢 — admin 전용
+## Phase 4 — 관리자 (admin.py) 🟢 — admin 전용 — ✅ 이전 완료 (web/services/admin.py, templates/admin.html)
 
-- [ ] 📊 시스템 상태 — Pinecone 벡터수(요약/원문), cron 로그 3종(마지막실행), 디스크/data폴더 크기
-- [ ] 💸 API 비용 모니터 — 자동작업 추정비용 표
-- [ ] 🎥 영상 수집 → Pinecone — 수집현황, 날짜범위, `DataPipeline.run_youtube_pipeline`(진행콜백) 💰
-- [ ] 📅 공용 데이터 편집 — 커스텀 일정 추가/삭제, 시점 키워드(읽기전용)
-- [ ] ⚙️ 강제 작업 — 데일리신문 강제재발행, 유튜버알림 강제갱신 💰, 캐시삭제 3종(평가서/매크로/시그널)
+> 접근 제어: `require_admin` 의존성(uid==APP_USERNAME, 아니면 403), 탭 내비도 admin에게만 노출.
+- [x] 📊 시스템 상태 — Pinecone 벡터수(요약/원문), cron 로그 3종(마지막실행), 디스크/data폴더 크기 (외부연동 실패 시 방어적 N/A)
+- [x] 💸 API 비용 모니터 — 자동작업 추정비용 표
+- [x] 🎥 영상 수집 상태 표시 — 수집현황(SheetDataLoader). **실행(`DataPipeline`) 보류**(수 분 소요, cron/스크립트로)
+- [x] 📅 공용 데이터 편집 — 커스텀 일정 추가/삭제(PRG), 시점 키워드(읽기전용)
+- [x] ⚙️ 강제 작업 — 데일리신문 강제재발행, 유튜버알림 강제갱신 💰(HTMX+confirm), 서버 캐시 초기화
+- 검증: admin GET·접근제어(비admin 403·탭숨김)·일정 CRUD(백업/복원)·캐시초기화 통과
 
 ---
 

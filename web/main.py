@@ -27,8 +27,19 @@ from urllib.parse import quote
 from web.services import (
     market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
     backtest as bt_svc, journal as journal_svc, alerts as alerts_svc, tracker as tracker_svc,
-    portfolio as pf_svc, analysts as an_svc,
+    portfolio as pf_svc, analysts as an_svc, admin as admin_svc,
 )
+
+import os as _os
+
+ADMIN_USER = _os.getenv("APP_USERNAME", "admin")
+
+
+def require_admin(request: Request) -> str:
+    uid = get_current_user(request)
+    if uid != ADMIN_USER:
+        raise StarletteHTTPException(status_code=403, detail="관리자 전용")
+    return uid
 
 _BASE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_BASE / "templates"))
@@ -97,9 +108,10 @@ async def logout():
 
 def _shell_ctx(uid: str, active: str | None = None) -> dict:
     """모든 탭 페이지 공통 셸 컨텍스트 (상단바·티커테이프·F&G·탭내비)."""
+    tabs = TABS + [("admin", "🔧 관리자")] if uid == ADMIN_USER else TABS
     return {
         "user_id": uid,
-        "tabs": TABS,
+        "tabs": tabs,
         "active_tab": active,
         "ticker_cards": market.get_ticker_tape(),
         "fg": market.get_fear_greed(),
@@ -430,6 +442,47 @@ async def an_comp(request: Request, query: str = Form(...), uid: str = Depends(g
 async def an_news(request: Request, ticker: str = Form("NVDA"), max_news: int = Form(10),
                   uid: str = Depends(get_current_user)):
     return templates.TemplateResponse(request, "_news_result.html", an_svc.news_analyze(ticker, max_news))
+
+
+# ── 관리자 탭 (admin 전용) ──
+def _redir_admin(flash: str) -> RedirectResponse:
+    return RedirectResponse(f"/t/admin?flash={quote(flash)}", status_code=303)
+
+
+@app.get("/t/admin", response_class=HTMLResponse)
+async def tab_admin(request: Request, flash: str = "", uid: str = Depends(require_admin)):
+    ctx = _shell_ctx(uid, active="admin")
+    ctx.update(admin_svc.get_context())
+    ctx["flash"] = flash
+    return templates.TemplateResponse(request, "admin.html", ctx)
+
+
+@app.post("/t/admin/event/add")
+async def admin_event_add(request: Request, date: str = Form(...), title: str = Form(""),
+                          uid: str = Depends(require_admin)):
+    return _redir_admin(admin_svc.add_event(date, title))
+
+
+@app.post("/t/admin/event/remove")
+async def admin_event_remove(request: Request, index: int = Form(...),
+                             uid: str = Depends(require_admin)):
+    return _redir_admin(admin_svc.remove_event(index))
+
+
+@app.post("/t/admin/republish-paper")
+async def admin_republish(request: Request, uid: str = Depends(require_admin)):
+    return _redir_admin(admin_svc.force_republish_paper())
+
+
+@app.post("/t/admin/clear-caches")
+async def admin_clear_caches(request: Request, uid: str = Depends(require_admin)):
+    return _redir_admin(admin_svc.clear_web_caches())
+
+
+@app.post("/t/admin/refresh-alerts", response_class=HTMLResponse)
+async def admin_refresh_alerts(request: Request, uid: str = Depends(require_admin)):
+    r = admin_svc.force_refresh_alerts()
+    return HTMLResponse(f"<div class='toast'>{r['msg']}</div>")
 
 
 # ── 아직 이전 안 된 탭 — 셸만 표시 (플레이스홀더) ──

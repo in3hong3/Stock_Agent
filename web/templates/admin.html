@@ -1,0 +1,92 @@
+{% extends "shell.html" %}
+{% block content %}
+<h3>🔧 관리자 — 시스템 운영</h3>
+<div class="muted-sm">admin 전용 — 시스템 상태·강제 작업·공용 데이터 편집</div>
+{% if flash %}<div class="toast" style="margin-top:10px;">{{ flash }}</div>{% endif %}
+
+{# 시스템 상태 #}
+<details class="news-card" style="margin-top:12px;" open>
+  <summary>📊 시스템 상태 (Pinecone · cron · 서버)</summary>
+  <b>🌲 Pinecone 인덱스</b>
+  {% if pinecone.ok %}
+  <div class="metric-row">
+    <div class="metric"><div class="m-label">총 벡터</div><div class="m-val">{{ pinecone.total|num('{:,}') }}</div></div>
+    <div class="metric"><div class="m-label">요약본</div><div class="m-val">{{ pinecone.summary|num('{:,}') }}</div></div>
+    <div class="metric"><div class="m-label">원문</div><div class="m-val">{{ pinecone.raw|num('{:,}') }}</div></div>
+  </div>
+  {% else %}<div class="muted-sm">조회 실패: {{ pinecone.error }}</div>{% endif %}
+
+  <b>⏰ cron 작업</b>
+  {% for c in crons %}
+  <div class="muted-sm" style="padding:4px 0;">• <b>{{ c.name }}</b> · {{ c.schedule }}
+    {% if c.exists %}<br><span style="color:#94A3B8;">마지막 실행 {{ c.mtime }} — {{ c.last_line }}</span>
+    {% else %}— <span class="c-down">로그 없음</span>{% endif %}</div>
+  {% endfor %}
+
+  <b>🖥️ 서버 / 디스크</b>
+  {% if disk.ok %}
+  <div class="metric-row">
+    <div class="metric"><div class="m-label">디스크 사용</div><div class="m-val">{{ disk.used_gb|num('{:.1f}') }} GB</div></div>
+    <div class="metric"><div class="m-label">디스크 여유</div><div class="m-val">{{ disk.free_gb|num('{:.1f}') }} GB</div></div>
+    <div class="metric"><div class="m-label">data/ 폴더</div><div class="m-val">{{ disk.data_mb|num('{:.2f}') }} MB</div></div>
+  </div>
+  {% else %}<div class="muted-sm">조회 실패: {{ disk.error }}</div>{% endif %}
+</details>
+
+{# API 비용 #}
+<details class="news-card" style="margin-top:8px;">
+  <summary>💸 API 비용 모니터</summary>
+  <div class="table-scroll"><table class="rank-table">
+    <thead><tr><th>작업</th><th>주기</th><th>1회 비용</th><th>월 예상</th></tr></thead>
+    <tbody>{% for name, cycle, unit, monthly in cost_rows %}<tr><td>{{ name }}</td><td>{{ cycle }}</td><td>{{ unit }}</td><td>{{ monthly }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="muted-sm">자동 작업만 합산: 월 약 $2.5 (수동 작업은 추가)</div>
+</details>
+
+{# 영상 수집 상태 #}
+<details class="news-card" style="margin-top:8px;">
+  <summary>🎥 YouTube 영상 수집 상태</summary>
+  <div class="metric-row">
+    <div class="metric"><div class="m-label">🎥 최신 영상</div><div class="m-val">{{ pipeline_status.youtube_date }}</div></div>
+    <div class="metric"><div class="m-label">📈 시장 지표</div><div class="m-val">{{ pipeline_status.market_date }}</div></div>
+  </div>
+  <div class="muted-sm">⚙️ 영상 수집 '실행'(DataPipeline)은 수 분 소요 작업이라 후속 이전 예정 — 현재는 cron/스크립트로 수행.</div>
+</details>
+
+{# 공용 데이터 편집 #}
+<details class="news-card" style="margin-top:8px;">
+  <summary>📅 공용 데이터 편집 — 커스텀 일정 / 시점 키워드</summary>
+  <b>📅 커스텀 일정 (모든 사용자에게 보임)</b>
+  <form class="inline-form" method="post" action="/t/admin/event/add">
+    <input type="date" name="date" required>
+    <input type="text" name="title" placeholder="예: 한미 정상회담, 휴장 등" style="flex:1;">
+    <button class="btn-ghost" type="submit">➕ 추가</button>
+  </form>
+  {% for ev in custom_events %}
+  <div class="alert-row">
+    <span>{{ ev.date }} — {{ ev.title }}</span>
+    <form method="post" action="/t/admin/event/remove" style="margin:0;"><input type="hidden" name="index" value="{{ loop.index0 }}">
+      <button class="btn-ghost btn-sm" type="submit">🗑️</button></form>
+  </div>
+  {% else %}<div class="muted-sm">등록된 커스텀 일정 없음</div>{% endfor %}
+
+  <b style="display:block; margin-top:10px;">🔑 시점 키워드 (읽기 전용)</b>
+  <div class="muted-sm"><code>{{ time_keywords.sample }}</code> …(총 {{ time_keywords.count }}개)</div>
+  <div class="muted-sm">수정하려면 modules/video_timing.py의 _TIME_KEYWORDS를 직접 편집.</div>
+</details>
+
+{# 강제 작업 #}
+<details class="news-card" style="margin-top:8px;">
+  <summary>⚙️ 강제 작업</summary>
+  <div class="muted-sm">⚠️ 일부는 LLM 비용이 발생합니다.</div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+    <form method="post" action="/t/admin/republish-paper"><button class="btn-ghost" type="submit">🗞️ 데일리 신문 강제 재발행</button></form>
+    <button class="btn-ghost" hx-post="/t/admin/refresh-alerts" hx-target="#admin-out" hx-swap="innerHTML"
+            hx-disabled-elt="this" hx-indicator="#admin-ind"
+            hx-confirm="유튜버 영상 알림을 강제 갱신합니다(LLM 비용). 진행할까요?">🎤 유튜버 알림 강제 갱신</button>
+    <form method="post" action="/t/admin/clear-caches" onsubmit="return confirm('서버 캐시를 초기화할까요?')"><button class="btn-ghost" type="submit">🧹 서버 캐시 초기화</button></form>
+  </div>
+  <div id="admin-ind" class="htmx-indicator muted-sm" style="padding:6px;">🎤 영상 분석 중… (15~30초)</div>
+  <div id="admin-out"></div>
+</details>
+{% endblock %}
