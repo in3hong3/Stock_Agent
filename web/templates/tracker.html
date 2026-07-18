@@ -62,6 +62,24 @@
 </details>
 {% endif %}
 
+{# 📈 시그널 정확도 상세 #}
+{% if acc_setups or acc_recent %}
+<details class="news-card" style="margin-top:8px;">
+  <summary>📈 시그널 정확도 상세</summary>
+  {% if acc_setups %}
+  <b>셋업별 성적</b>
+  {% for s in acc_setups %}<div class="muted-sm">- {{ s.setup }} — 적중률 <b>{{ '%.0f'|format(s.win_rate) }}%</b> (n={{ s.n }}) · 평균수익 {{ '%+.1f'|format(s.avg_ret) }}%</div>{% endfor %}
+  {% endif %}
+  {% if acc_recent %}
+  <b style="display:block;margin-top:8px;">최근 채점 결과</b>
+  <div class="table-scroll"><table class="rank-table">
+    <thead><tr><th>예측일</th><th>티커</th><th>액션</th><th>셋업</th><th>결과</th><th>수익률%</th></tr></thead>
+    <tbody>{% for r in acc_recent %}<tr><td>{{ r.pred_date }}</td><td><b>{{ r.ticker }}</b></td><td>{{ r.action }}</td><td>{{ r.setup }}</td><td>{{ r.outcome }}</td><td>{{ r.ret_pct }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+</details>
+{% endif %}
+
 {# 📈 자산 추이 #}
 {% if asset_svg %}
 <details class="news-card" style="margin-top:8px;">

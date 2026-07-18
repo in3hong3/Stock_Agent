@@ -416,6 +416,12 @@ async def pf_rebalance(request: Request, uid: str = Depends(get_current_user)):
     return templates.TemplateResponse(request, "_pf_rebalance.html", pfa_svc.rebalance())
 
 
+@app.post("/t/portfolio/action-plan", response_class=HTMLResponse)
+async def pf_action_plan(request: Request, deploy: float = Form(100),
+                         uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_pf_actionplan.html", pfa_svc.action_plan(deploy))
+
+
 @app.post("/t/portfolio/chat", response_class=HTMLResponse)
 async def pf_chat(request: Request, query: str = Form(...), uid: str = Depends(get_current_user)):
     msgs = pfa_svc.personalized_chat(uid, query)

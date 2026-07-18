@@ -110,6 +110,18 @@
   </form>
 </div>
 
+{# 💵 현금 기준 실행 지시 #}
+<hr class="sep">
+<h4>💵 현금 기준 실행 지시</h4>
+<div class="muted-sm">보유 달러 현금으로 무엇을 몇 주 사고팔지 규칙 기반으로 제안합니다.</div>
+<form class="inline-form" hx-post="/t/portfolio/action-plan" hx-target="#pf-plan" hx-swap="innerHTML"
+      hx-disabled-elt="button" hx-indicator="#pf-plan-ind">
+  <label class="muted-sm">투입 비율 %<input type="number" name="deploy" value="100" min="10" max="100" step="5" style="width:90px;"></label>
+  <button class="btn-primary" type="submit">💵 실행 지시 생성</button>
+</form>
+<div id="pf-plan-ind" class="htmx-indicator muted-sm" style="padding:6px;">신호 계산 중… (수십 초)</div>
+<div id="pf-plan"></div>
+
 <hr class="sep">
 <div class="subtabs" id="pfSub">
   <button class="subtab active" data-p="detail">📋 종목상세</button>

@@ -14,8 +14,40 @@ _news_cache: dict = {}     # ticker -> (ts, list)
 _yt_cache: dict = {"ts": 0.0, "rows": None}
 
 
+def _auto_fill_prices():
+    """포트폴리오의 빈 현재가를 yfinance로 조용히 채움 (Streamlit auto_fill_missing_prices 대응).
+    빈 가격이 없으면 네트워크 호출 없음."""
+    try:
+        import os
+        from web.services.portfolio import _pf_path, _load_df, _save_df
+        if not os.path.exists(_pf_path()):
+            return
+        df = _load_df()
+        if "current_price" not in df.columns or df.empty:
+            return
+        mask = df["current_price"].isna() | (df["current_price"] <= 0)
+        if not mask.any():
+            return
+        from utils.price_updater import PriceUpdater
+        updater = PriceUpdater()
+        filled = False
+        for idx in df.index[mask]:
+            tk = str(df.at[idx, "ticker"]).strip()
+            if not tk or tk.lower() in ("nan", "none"):
+                continue
+            price = updater.get_current_price(tk)
+            if price and price > 0:
+                df.at[idx, "current_price"] = float(price)
+                filled = True
+        if filled:
+            _save_df(df)
+    except Exception as e:
+        print(f"[tracker] 자동 가격채움 실패: {e}")
+
+
 def _holdings():
     from modules.issue_tracker import get_portfolio_holdings
+    _auto_fill_prices()
     return get_portfolio_holdings()
 
 
@@ -97,7 +129,16 @@ def get_context() -> dict:
     # 적중률
     try:
         from modules.signal_tracker import get_accuracy_stats
-        ctx["accuracy"] = get_accuracy_stats()
+        acc = get_accuracy_stats()
+        ctx["accuracy"] = acc
+        # 셋업별 상세표 + 최근 채점결과 (템플릿 렌더용 변환)
+        ctx["acc_setups"] = sorted(
+            ({"setup": k, **v} for k, v in (acc.get("setup_stats") or {}).items()),
+            key=lambda x: -(x.get("win_rate") or 0))
+        recent = acc.get("recent")
+        if recent is not None and hasattr(recent, "empty") and not recent.empty:
+            cols = ["pred_date", "ticker", "action", "setup", "outcome", "ret_pct"]
+            ctx["acc_recent"] = recent[cols].to_dict("records")
     except Exception as e:
         print(f"[tracker] 적중률 실패: {e}")
         ctx["accuracy"] = {}

@@ -278,3 +278,7 @@ h5 { margin: 6px 0; font-size: 0.95rem; }
 .chat-user { background: rgba(0,255,163,0.06); border: 1px solid rgba(0,255,163,0.15); }
 .chat-assistant { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--point); }
 .chat-role { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; font-weight: 700; }
+
+/* ── 매크로 스파크라인 그리드 ── */
+.macro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 8px; }
+.macro-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }

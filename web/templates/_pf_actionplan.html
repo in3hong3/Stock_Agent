@@ -1,0 +1,11 @@
+{% if error %}<div class="toast" style="color:#FFC94B;border-color:#FFA50055;">⚠️ {{ error }}</div>{% else %}
+{% set p = plan %}
+<div class="muted-sm">가용 현금 ${{ (cash_usd * deploy_pct / 100)|num('{:,.0f}') }}{% if p.proceeds %} + 매도대금 ${{ p.proceeds|num('{:,.0f}') }}{% endif %} = <b>${{ p.available|num('{:,.0f}') }}</b> 투입 가능</div>
+{% if p.sells %}<b>🔴 팔 것</b>
+{% for x in p.sells %}<div class="muted-sm">- <b>{{ x.ticker }} {{ x.qty|num('{:,}') }}주 매도</b> (≈${{ x.amount|num('{:,.0f}') }}) — {{ x.action }}</div>{% endfor %}{% endif %}
+{% if p.buys %}<b>🟢 살 것</b>
+{% for x in p.buys %}<div class="muted-sm">- <b>{{ x.ticker }} {{ x.qty|num('{:,}') }}주 매수</b> (≈${{ x.amount|num('{:,.0f}') }} @ ${{ x.price|num('{:,.2f}') }}) — {{ x.action }}{% if x.target %} · 목표 {{ x.target|num('{:,.2f}') }}{% endif %}</div>{% endfor %}
+<div class="muted-sm">매수 합계 ${{ p.spent|num('{:,.0f}') }} · 잔여 ${{ p.leftover|num('{:,.0f}') }}</div>{% endif %}
+{% if not p.sells and not p.buys %}<div class="muted-sm">지금은 뚜렷한 매도/매수 신호가 없습니다 — 현금 보유 유지가 무난.</div>{% endif %}
+<div class="muted-sm" style="margin-top:6px;">⚠️ 규칙 기반 참고용 — 투자 권유 아님, 주문은 직접 체결하세요.</div>
+{% endif %}

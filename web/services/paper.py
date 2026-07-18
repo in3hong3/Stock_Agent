@@ -24,6 +24,20 @@ def _cached(key: str, ttl: int, fn):
     return val
 
 
+def _sparkline_svg(spark: list, up: bool, w: int = 120, h: int = 32) -> str:
+    """미니 스파크라인 (최근 1개월 추세) — 외부 라이브러리 없이."""
+    vals = [v for v in (spark or []) if v is not None]
+    if len(vals) < 2:
+        return ""
+    lo, hi = min(vals), max(vals)
+    rng = (hi - lo) or 1
+    n = len(vals)
+    color = "#FF4B4B" if up else "#4B7BFF"
+    pts = " ".join(f"{i/(n-1)*w:.1f},{h - (v-lo)/rng*h:.1f}" for i, v in enumerate(vals))
+    return (f'<svg viewBox="0 0 {w} {h}" style="width:{w}px;height:{h}px;">'
+            f'<polyline fill="none" stroke="{color}" stroke-width="1.5" points="{pts}"/></svg>')
+
+
 def md_to_html(text: str) -> str:
     """신문 본문 마크다운 → HTML (제목/굵게/목록/표)."""
     if not text:
@@ -61,9 +75,15 @@ def get_context() -> dict:
     holdings = _holdings()
     tickers = tuple(h["ticker"] for h in holdings)
 
-    # 시세판 (변동률 있는 것만)
+    # 시세판 (변동률 있는 것만) + 매크로 상세(스파크라인)
+    macro_detail = []
     try:
         macro = [m for m in _macro() if m.get("change_pct") is not None]
+        for m in macro:
+            macro_detail.append({
+                "name": m["name"], "value_str": m["value_str"], "change_pct": m["change_pct"],
+                "spark_svg": _sparkline_svg(m.get("spark"), (m.get("change_pct") or 0) >= 0),
+            })
     except Exception as e:
         print(f"[paper] macro 실패: {e}")
         macro = []
@@ -91,6 +111,7 @@ def get_context() -> dict:
         "paper_front_html": md_to_html(saved["front"]) if saved else "",
         "paper_time": saved.get("time") if saved else "",
         "macro": macro,
+        "macro_detail": macro_detail,
         "upcoming": upcoming,
         "news": news,
         "has_tickers": bool(tickers),

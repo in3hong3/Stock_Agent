@@ -124,6 +124,27 @@ def rebalance() -> dict:
     }
 
 
+# ── 💵 현금 기준 실행 지시 ──
+def action_plan(deploy_pct: float) -> dict:
+    import os
+    from web.services.portfolio import _pf_path, _cash
+    from web.services.meta import load_meta
+    if not os.path.exists(_pf_path()):
+        return {"error": "포트폴리오가 비어 있습니다."}
+    cash = _cash()
+    if cash["usd"] <= 0:
+        return {"error": "'💵 보유 현금'에 달러 현금($)을 먼저 입력하세요."}
+    from modules.issue_tracker import get_portfolio_holdings
+    from modules.trade_signal import generate_signals
+    from modules.action_plan import build_action_plan
+    m = load_meta()
+    stance = m.get("advisor_stance") or "aggressive"
+    risk = float(m.get("risk_pct", 1.0) or 1.0)
+    sigs = generate_signals(get_portfolio_holdings(), stance=stance, seed=0, risk_pct=risk)["signals"]
+    plan = build_action_plan(sigs, cash["usd"], deploy_pct=deploy_pct)
+    return {"plan": plan, "cash_usd": cash["usd"], "deploy_pct": deploy_pct}
+
+
 # ── 💬 개인화 챗봇 ──
 def pchat_history(uid: str) -> list:
     return _pchat.get(uid, [])

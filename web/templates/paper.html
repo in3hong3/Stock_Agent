@@ -14,6 +14,21 @@
   ✍️ AI 편집장이 1면 작성 중… (매크로·뉴스·공시 종합, 30~60초)
 </div>
 
+{% if macro_detail %}
+<details class="news-card" style="margin-top:10px;">
+  <summary>📊 매크로 지표 상세 (최근 1개월 추세)</summary>
+  <div class="macro-grid">
+    {% for m in macro_detail %}
+    <div class="macro-item">
+      <div class="muted-sm">{{ m.name }}</div>
+      <div><b>{{ m.value_str }}</b> <span class="{{ 'c-up' if m.change_pct >= 0 else 'c-down' }}">{{ '%+.2f'|format(m.change_pct) }}%</span></div>
+      {{ m.spark_svg|safe }}
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+
 <div class="paper-cols">
   {# 좌: 시세판 #}
   <div class="paper-quotes">

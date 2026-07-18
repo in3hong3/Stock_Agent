@@ -62,6 +62,16 @@
     </tr>{% endfor %}</tbody>
   </table></div>
   {% endif %}
+  {% if trackrecord.best_calls or trackrecord.worst_calls %}
+  <div class="paper-cols" style="grid-template-columns:1fr 1fr; margin-top:8px;">
+    <div><b>🏅 잘 맞은 매수 콜 (+30일 알파)</b>
+      {% for b in trackrecord.best_calls %}<div class="muted-sm">- <b>{{ b.ticker }}</b> <code>{{ b.date }}</code> · 수익 {{ '%+.0f'|format(b.ret) }}% · 알파 {{ '%+.0f'|format(b.alpha) }}%</div>{% endfor %}
+    </div>
+    <div><b>💤 빗나간 매수 콜</b>
+      {% for w in trackrecord.worst_calls %}<div class="muted-sm">- <b>{{ w.ticker }}</b> <code>{{ w.date }}</code> · 수익 {{ '%+.0f'|format(w.ret) }}% · 알파 {{ '%+.0f'|format(w.alpha) }}%</div>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
 </details>
 {% endif %}
 
