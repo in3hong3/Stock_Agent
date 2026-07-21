@@ -1,0 +1,10 @@
+<div class="side-title">✅ 오늘 할 일 {% if badge %}<span class="muted-sm">({{ badge }} · {{ date }})</span>{% endif %}</div>
+{% for a in actions %}
+<div class="muted-sm" style="padding:4px 0; border-top:1px solid var(--border);">
+  {% if a.kind == 'stock' %}{{ a.icon }} <b>{{ a.title }}</b> <span style="color:#94A3B8;">{{ a.meta or '' }}</span>
+    {% for em, tx in (a.lines or []) %}<div style="padding-left:14px; color:#94A3B8;">{{ em }} {{ tx }}</div>{% endfor %}
+  {% else %}{{ a.icon }} {{ a.text }}{% endif %}
+</div>
+{% else %}
+<div class="muted-sm">오늘 할 일이 없습니다.</div>
+{% endfor %}

@@ -1,0 +1,10 @@
+<div class="side-title">🎤 유튜버 타이밍 {% if alerts %}<span class="muted-sm">({{ gen }})</span>{% endif %}</div>
+{% for a in alerts %}
+<div class="muted-sm" style="padding:5px 0; border-top:1px solid var(--border);">
+  <div><b>{{ a.level or '' }}</b> {% if a.ticker %}<span style="color:#60a5fa;">{{ a.ticker }}</span> {% endif %}{{ a.title or '' }}</div>
+  <div style="color:#94A3B8;">💬 {{ a.message or '' }}</div>
+  {% if a.video_link %}<a href="{{ a.video_link }}" target="_blank" rel="noopener" style="color:#94A3B8;">📺 {{ (a.source_video or '')[:28] }} ↗</a>{% endif %}
+</div>
+{% else %}
+<div class="muted-sm">활성 알림이 없습니다.</div>
+{% endfor %}

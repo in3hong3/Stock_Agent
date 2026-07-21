@@ -1,0 +1,6 @@
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+  <button class="btn-ghost btn-sm" hx-get="/sidebar/calendar?year={{ cal_year }}&month={{ cal_month }}&dir=-1" hx-target="#side-cal" hx-swap="innerHTML">◀</button>
+  <span class="side-title" style="margin:0;">🗓️ {{ cal_year }}.{{ '%02d'|format(cal_month) }}</span>
+  <button class="btn-ghost btn-sm" hx-get="/sidebar/calendar?year={{ cal_year }}&month={{ cal_month }}&dir=1" hx-target="#side-cal" hx-swap="innerHTML">▶</button>
+</div>
+<div class="cal-wrap">{{ cal_html|safe }}</div>

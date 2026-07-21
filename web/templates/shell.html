@@ -40,5 +40,10 @@
   {% endfor %}
 </div>
 
-<div class="content">{% block content %}{% endblock %}</div>
+<div class="layout">
+  <div class="content">{% block content %}{% endblock %}</div>
+  <aside class="sidebar" hx-get="/sidebar" hx-trigger="load" hx-swap="innerHTML">
+    <div class="muted-sm" style="padding:12px;">사이드 패널 불러오는 중…</div>
+  </aside>
+</div>
 {% endblock %}

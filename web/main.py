@@ -28,7 +28,7 @@ from web.services import (
     market, paper as paper_svc, hot as hot_svc, ml as ml_svc, weekly as weekly_svc,
     backtest as bt_svc, journal as journal_svc, alerts as alerts_svc, tracker as tracker_svc,
     portfolio as pf_svc, analysts as an_svc, admin as admin_svc,
-    portfolio_analysis as pfa_svc,
+    portfolio_analysis as pfa_svc, sidebar as side_svc,
 )
 
 import os as _os
@@ -510,6 +510,51 @@ async def an_comp(request: Request, query: str = Form(...), uid: str = Depends(g
 async def an_news(request: Request, ticker: str = Form("NVDA"), max_news: int = Form(10),
                   uid: str = Depends(get_current_user)):
     return templates.TemplateResponse(request, "_news_result.html", an_svc.news_analyze(ticker, max_news))
+
+
+# ── 오른쪽 사이드 패널 (HTMX lazy) ──
+@app.get("/sidebar", response_class=HTMLResponse)
+async def sidebar(request: Request, uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_sidebar.html", side_svc.light_context())
+
+
+@app.get("/sidebar/todo", response_class=HTMLResponse)
+async def sidebar_todo(request: Request, uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_sidebar_todo.html", side_svc.todo())
+
+
+@app.get("/sidebar/youtuber", response_class=HTMLResponse)
+async def sidebar_youtuber(request: Request, uid: str = Depends(get_current_user)):
+    return templates.TemplateResponse(request, "_sidebar_youtuber.html", side_svc.youtuber())
+
+
+@app.get("/sidebar/calendar", response_class=HTMLResponse)
+async def sidebar_calendar(request: Request, year: int, month: int, dir: int = 0,
+                           uid: str = Depends(get_current_user)):
+    month += dir
+    if month == 0:
+        month, year = 12, year - 1
+    elif month == 13:
+        month, year = 1, year + 1
+    ctx = side_svc.light_context(cal_year=year, cal_month=month)
+    return templates.TemplateResponse(request, "_sidebar_calendar.html", ctx)
+
+
+@app.post("/sidebar/event/add")
+async def sidebar_event_add(request: Request, date: str = Form(...), title: str = Form(""),
+                            uid: str = Depends(get_current_user)):
+    from modules.event_calendar import add_custom_event
+    if title.strip():
+        add_custom_event(date, title.strip())
+    return RedirectResponse(request.headers.get("referer", "/"), status_code=303)
+
+
+@app.post("/sidebar/event/remove")
+async def sidebar_event_remove(request: Request, index: int = Form(...),
+                               uid: str = Depends(get_current_user)):
+    from modules.event_calendar import remove_custom_event
+    remove_custom_event(index)
+    return RedirectResponse(request.headers.get("referer", "/"), status_code=303)
 
 
 # ── 관리자 탭 (admin 전용) ──

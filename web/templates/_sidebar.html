@@ -1,0 +1,56 @@
+{# 💰 내 자산 #}
+{% if assets.has_assets %}
+<div class="side-card">
+  <div class="side-title">💰 내 자산</div>
+  <div style="font-size:1.3rem; font-weight:700;">₩{{ assets.total|num('{:,.0f}') }}</div>
+  <div class="muted-sm">≈ ${{ assets.usd_total|num('{:,.0f}') }}</div>
+  <div class="side-row"><span class="muted-sm">주식 평가</span><span>₩{{ assets.stock_eval|num('{:,.0f}') }}</span></div>
+  <div class="side-row"><span class="muted-sm">평가 손익</span><span class="{{ 'c-up' if assets.pnl >= 0 else 'c-down' }}">{{ assets.pnl|num('{:+,.0f}') }} ({{ assets.pnl_rate|num('{:+.1f}') }}%)</span></div>
+  <div class="side-row"><span class="muted-sm">현금 비중</span><span>{{ assets.cash_ratio|num('{:.1f}') }}%</span></div>
+  {% if assets.holdings %}
+  <div class="side-sep"></div>
+  {% for it in assets.holdings %}
+  <div class="side-row"><span><b>{{ it.ticker }}</b> <span class="muted-sm">${{ it.eval_usd|num('{:,.0f}') }}</span></span>
+    <span class="{{ 'c-up' if (it.pr or 0) > 0 else 'c-down' if (it.pr or 0) < 0 else 'muted-sm' }}">{{ (it.pr|num('{:+.1f}')) ~ '%' if it.pr is not none else '—' }}</span></div>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endif %}
+
+{# ✅ 오늘 할 일 (lazy) #}
+<div class="side-card" hx-get="/sidebar/todo" hx-trigger="load" hx-swap="innerHTML">
+  <div class="side-title">✅ 오늘 할 일</div><div class="muted-sm">불러오는 중…</div>
+</div>
+
+{# 🎤 유튜버 타이밍 (lazy) #}
+<div class="side-card" hx-get="/sidebar/youtuber" hx-trigger="load" hx-swap="innerHTML">
+  <div class="side-title">🎤 유튜버 타이밍</div><div class="muted-sm">불러오는 중…</div>
+</div>
+
+{# 📅 다가오는 일정 #}
+<div class="side-card">
+  <div class="side-title">📅 다가오는 일정</div>
+  {% for ev in upcoming %}
+  <div class="muted-sm" style="display:flex; gap:6px;"><b style="color:var(--point); min-width:36px;">{{ ev.d_label }}</b><span style="min-width:36px;">{{ ev.date }}</span><span>{{ ev.title }}</span></div>
+  {% else %}<div class="muted-sm">3주 이내 일정 없음</div>{% endfor %}
+</div>
+
+{# 🗓️ 월별 달력 #}
+<div class="side-card" id="side-cal">
+  {% include "_sidebar_calendar.html" %}
+</div>
+
+{# 📝 일정 추가 #}
+<details class="side-card">
+  <summary class="side-title">📝 일정 추가/삭제</summary>
+  <form method="post" action="/sidebar/event/add" class="inline-form" style="margin-top:6px;">
+    <input type="date" name="date" required style="width:130px;">
+    <input type="text" name="title" placeholder="일정 내용" style="flex:1;">
+    <button class="btn-ghost btn-sm" type="submit">➕</button>
+  </form>
+  {% for ev in custom_events %}
+  <div class="side-row"><span class="muted-sm">{{ ev.date }} — {{ ev.title }}</span>
+    <form method="post" action="/sidebar/event/remove" style="margin:0;"><input type="hidden" name="index" value="{{ loop.index0 }}">
+      <button class="btn-ghost btn-sm" type="submit">🗑️</button></form></div>
+  {% endfor %}
+</details>
