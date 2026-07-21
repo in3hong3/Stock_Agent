@@ -10,12 +10,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from web.auth import AUTH_COOKIE, user_from_cookie
 
 
-def get_current_user(request: Request) -> str:
+async def get_current_user(request: Request) -> str:
+    """반드시 async — 동기(def) 의존성은 FastAPI가 스레드풀에서 실행해서
+    여기서 set한 contextvar가 엔드포인트/서비스(같은 태스크)로 전파되지 않는다.
+    async면 요청 태스크에서 그대로 실행돼 current_user()가 올바른 사용자를 읽는다."""
     uid = user_from_cookie(request.cookies.get(AUTH_COOKIE))
     if not uid:
         # 브라우저 요청이면 로그인 페이지로, API면 401
         raise StarletteHTTPException(status_code=401, detail="login required")
-    # 사용자별 데이터 경로가 이 요청 사용자를 쓰도록 바인딩 (Phase 2 CRUD에서 활용)
+    # 사용자별 데이터 경로가 이 요청 사용자를 쓰도록 바인딩
     try:
         from utils import user_data
         if hasattr(user_data, "set_current_user"):

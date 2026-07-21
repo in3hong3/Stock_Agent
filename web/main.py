@@ -36,8 +36,8 @@ import os as _os
 ADMIN_USER = _os.getenv("APP_USERNAME", "admin")
 
 
-def require_admin(request: Request) -> str:
-    uid = get_current_user(request)
+async def require_admin(request: Request) -> str:
+    uid = await get_current_user(request)
     if uid != ADMIN_USER:
         raise StarletteHTTPException(status_code=403, detail="관리자 전용")
     return uid
