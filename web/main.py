@@ -84,14 +84,46 @@ async def login_form(request: Request, error: str = ""):
     return templates.TemplateResponse(request, "login.html", {"error": error})
 
 
+# ── 로그인 무차별 대입 방어 (IP별 실패 rate limit, 인메모리) ──
+import time as _time
+
+_login_fails: dict[str, list] = {}
+LOGIN_MAX_FAILS = 5      # 창 안에서 이만큼 실패하면 차단
+LOGIN_WINDOW = 300.0     # 5분 롤링 창
+
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")  # nginx 프록시 뒤 실제 IP
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _login_blocked(ip: str) -> bool:
+    now = _time.time()
+    fails = [t for t in _login_fails.get(ip, []) if now - t < LOGIN_WINDOW]
+    _login_fails[ip] = fails
+    return len(fails) >= LOGIN_MAX_FAILS
+
+
 @app.post("/login")
 async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+    ip = _client_ip(request)
+    if _login_blocked(ip):
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"error": "로그인 시도가 너무 많습니다. 5분 후 다시 시도하세요."},
+            status_code=429,
+        )
     if not verify_login(username, password):
+        _login_fails.setdefault(ip, []).append(_time.time())
+        print(f"[login] 실패 ip={ip} user={username!r}")  # 감사 로그
         return templates.TemplateResponse(
             request, "login.html",
             {"error": "계정 정보가 일치하지 않습니다."},
             status_code=401,
         )
+    _login_fails.pop(ip, None)  # 성공 시 실패 카운트 초기화
     resp = RedirectResponse("/", status_code=303)
     resp.set_cookie(
         AUTH_COOKIE, make_cookie_value(username),
