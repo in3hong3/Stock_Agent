@@ -29,14 +29,14 @@ ssh -i "C:/Users/gg951/Downloads/ssh-key-2026-06-12 (1).key" \
     -o StrictHostKeyChecking=accept-new \
     -o ConnectTimeout=15 \
     ubuntu@161.33.6.231 \
-    "cd ~/stock-agent && git pull && sudo systemctl restart stock-agent && sleep 2 && sudo systemctl status stock-agent --no-pager | head -8"
+    "cd ~/stock-agent && git pull && sudo systemctl restart stock-agent-v2 && sleep 2 && sudo systemctl status stock-agent-v2 --no-pager | head -8"
 ```
 - 출력에 `Active: active (running)` 확인되면 성공
 - pull 충돌·서비스 실패하면 사용자에게 보고하고 더 진행하지 않음
 
 ### 5. 사용자에게 한 줄 보고
 형식:
-> ✅ 배포 완료 — commit `abc1234` · 서버 active (running) · http://161.33.6.231/
+> ✅ 배포 완료 — commit `abc1234` · 서버 active (running) · https://in3stock.duckdns.org/
 > 변경 핵심: <한 줄 요약>
 
 ---
@@ -57,11 +57,13 @@ ssh -i "C:/Users/gg951/Downloads/ssh-key-2026-06-12 (1).key" \
 | 항목 | 값 |
 |---|---|
 | GitHub origin | `https://github.com/in3hong3/Stock_Agent` |
-| Oracle VM IP | `161.33.6.231` (포트 80 → nginx → streamlit 8501) |
+| 운영 도메인 | `https://in3stock.duckdns.org` (nginx → uvicorn 8000, Let's Encrypt HTTPS) |
+| Oracle VM IP | `161.33.6.231` (http:80 → 301 https 도메인 리다이렉트) |
 | SSH 키 | `C:/Users/gg951/Downloads/ssh-key-2026-06-12 (1).key` |
 | SSH 사용자 | `ubuntu` |
 | 서버 앱 경로 | `~/stock-agent` |
-| 서비스 이름 | `stock-agent` (systemd) |
+| 서비스 이름 | `stock-agent-v2` (systemd, FastAPI/uvicorn:8000) — 운영 앱 |
+| 옛 Streamlit | `stock-agent` 서비스는 **중지+비활성화**됨. 필요 시 SSH 터널 `-L 8501:127.0.0.1:8501` 후 `sudo systemctl start stock-agent` |
 | 로컬 dev 포트 | 8503 (config.toml `runOnSave=true`) |
 
 ---
